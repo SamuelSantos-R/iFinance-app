@@ -24,7 +24,7 @@ jobs:
 
       - name: Find Workspace and Scheme, then Build Unsigned App
         run: |
-          WORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
+          WORKSPACE=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -n 1)
           SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" | grep -A 5 "Schemes:" | tail -n +2 | xargs | awk '{print $1}')
           echo "Workspace: $WORKSPACE"
           echo "Scheme: $SCHEME"
