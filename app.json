@@ -8,7 +8,11 @@
     "scheme": "firstapp",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "bundleIdentifier": "com.heatz.ifinance",
+      "icon": "./assets/expo.icon",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Use o Face ID para acessar sua conta de forma rápida e segura."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -34,11 +38,25 @@
             "imageWidth": 76
           }
         }
+      ],
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Use o Face ID para acessar sua conta de forma rápida e segura."
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "648921c9-91e1-4596-a427-a42fd58faede"
+      }
     }
   }
 }
