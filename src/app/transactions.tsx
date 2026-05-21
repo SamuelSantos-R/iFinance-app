@@ -1,8 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, Alert, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  Alert,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/auth-context';
 import { supabase } from '@/lib/supabase';
-import { Plus, X, ArrowUpRight, ArrowDownLeft, Trash2, Calendar, Filter } from 'lucide-react-native';
+import {
+  Plus,
+  X,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Trash2,
+  Filter,
+} from 'lucide-react-native';
 
 interface Transaction {
   id: string;
@@ -17,6 +36,17 @@ interface Transaction {
 const CATEGORIES = ['Alimentação', 'Transporte', 'Moradia', 'Lazer', 'Saúde', 'Salário', 'Educação', 'Outros'];
 const BANKS = ['Nubank', 'Inter', 'Revolut', 'Itaú', 'Bradesco', 'Outro'];
 
+const CATEGORY_COLORS: Record<string, string> = {
+  'Alimentação': '#FF9500',
+  'Transporte': '#007AFF',
+  'Moradia': '#FF3B30',
+  'Lazer': '#AF52DE',
+  'Saúde': '#34C759',
+  'Salário': '#5AC8FA',
+  'Educação': '#FFCC00',
+  'Outros': '#8E8E93',
+};
+
 export default function TransactionsScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -24,7 +54,6 @@ export default function TransactionsScreen() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
 
-  // Form states
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState(CATEGORIES[0]);
@@ -49,7 +78,7 @@ export default function TransactionsScreen() {
       if (error) throw error;
       setTransactions(data || []);
     } catch (err: any) {
-      console.error('Error fetching transactions:', err.message);
+      console.warn('Error fetching transactions:', err.message);
     } finally {
       setLoading(false);
     }
@@ -59,9 +88,15 @@ export default function TransactionsScreen() {
     fetchTransactions();
   }, [user, filterType]);
 
+  const openModal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsModalOpen(true);
+  };
+
   const handleAddTransaction = async () => {
-    if (!amount || isNaN(parseFloat(amount))) {
-      Alert.alert('Erro', 'Por favor, insira um valor válido.');
+    if (!amount || isNaN(parseFloat(amount.replace(',', '.')))) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Valor inválido', 'Por favor, insira um valor válido.');
       return;
     }
 
@@ -69,7 +104,7 @@ export default function TransactionsScreen() {
     try {
       const { error } = await supabase.from('transactions').insert({
         user_id: user?.id,
-        amount: parseFloat(amount),
+        amount: parseFloat(amount.replace(',', '.')),
         description: description || category,
         category,
         bank,
@@ -79,18 +114,16 @@ export default function TransactionsScreen() {
 
       if (error) throw error;
 
-      Alert.alert('Sucesso', 'Transação registrada com sucesso!');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setIsModalOpen(false);
-      
-      // Reset form
       setAmount('');
       setDescription('');
       setCategory(CATEGORIES[0]);
       setBank(BANKS[0]);
       setType('expense');
-      
       fetchTransactions();
     } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert('Erro', err.message || 'Falha ao salvar transação.');
     } finally {
       setSubmitting(false);
@@ -98,7 +131,8 @@ export default function TransactionsScreen() {
   };
 
   const handleDeleteTransaction = (id: string) => {
-    Alert.alert('Confirmar Exclusão', 'Deseja realmente apagar esta transação?', [
+    Haptics.selectionAsync();
+    Alert.alert('Apagar transação?', 'Essa ação não pode ser desfeita.', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Apagar',
@@ -107,6 +141,7 @@ export default function TransactionsScreen() {
           try {
             const { error } = await supabase.from('transactions').delete().eq('id', id);
             if (error) throw error;
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             fetchTransactions();
           } catch (err: any) {
             Alert.alert('Erro', err.message || 'Erro ao deletar.');
@@ -116,232 +151,434 @@ export default function TransactionsScreen() {
     ]);
   };
 
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(value);
-  };
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
   return (
     <View className="flex-1 bg-black">
       {/* Header */}
-      <View className="px-6 pt-14 pb-4 flex-row justify-between items-center border-b border-zinc-900">
-        <Text className="text-white text-2xl font-bold font-rounded">Lançamentos</Text>
+      <View className="px-6 pt-14 pb-2 flex-row justify-between items-end">
+        <Text className="text-white text-[28px] font-bold tracking-tight">Lançamentos</Text>
         <TouchableOpacity
-          onPress={() => setIsModalOpen(true)}
-          className="w-10 h-10 rounded-full bg-blue-600 items-center justify-center shadow-lg shadow-blue-500/20"
+          onPress={openModal}
+          activeOpacity={0.85}
+          className="items-center justify-center"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 18,
+            backgroundColor: '#007AFF',
+            shadowColor: '#007AFF',
+            shadowOpacity: 0.3,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 4 },
+          }}
         >
-          <Plus size={20} color="white" />
+          <Plus size={18} color="white" strokeWidth={2.5} />
         </TouchableOpacity>
       </View>
 
       {/* Filter Tabs */}
-      <View className="px-6 py-4 flex-row space-x-2 gap-2 border-b border-zinc-900">
-        <TouchableOpacity
-          onPress={() => setFilterType('all')}
-          className={`px-4 py-2 rounded-full ${
-            filterType === 'all' ? 'bg-zinc-800 border border-zinc-700' : 'bg-transparent'
-          }`}
-        >
-          <Text className={`text-sm font-semibold font-rounded ${filterType === 'all' ? 'text-white' : 'text-zinc-500'}`}>
-            Todos
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setFilterType('income')}
-          className={`px-4 py-2 rounded-full flex-row items-center gap-1.5 ${
-            filterType === 'income' ? 'bg-green-500/10 border border-green-500/30' : 'bg-transparent'
-          }`}
-        >
-          <ArrowUpRight size={14} color={filterType === 'income' ? '#34C759' : '#8E8E93'} />
-          <Text className={`text-sm font-semibold font-rounded ${filterType === 'income' ? 'text-green-500' : 'text-zinc-500'}`}>
-            Entradas
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={() => setFilterType('expense')}
-          className={`px-4 py-2 rounded-full flex-row items-center gap-1.5 ${
-            filterType === 'expense' ? 'bg-red-500/10 border border-red-500/30' : 'bg-transparent'
-          }`}
-        >
-          <ArrowDownLeft size={14} color={filterType === 'expense' ? '#FF3B30' : '#8E8E93'} />
-          <Text className={`text-sm font-semibold font-rounded ${filterType === 'expense' ? 'text-red-500' : 'text-zinc-500'}`}>
-            Saídas
-          </Text>
-        </TouchableOpacity>
+      <View className="px-6 py-4 flex-row" style={{ gap: 8 }}>
+        <FilterChip
+          label="Todos"
+          active={filterType === 'all'}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setFilterType('all');
+          }}
+        />
+        <FilterChip
+          label="Entradas"
+          icon={<ArrowUpRight size={13} color={filterType === 'income' ? '#34C759' : '#8E8E93'} />}
+          active={filterType === 'income'}
+          activeColor="#34C759"
+          onPress={() => {
+            Haptics.selectionAsync();
+            setFilterType('income');
+          }}
+        />
+        <FilterChip
+          label="Saídas"
+          icon={<ArrowDownLeft size={13} color={filterType === 'expense' ? '#FF3B30' : '#8E8E93'} />}
+          active={filterType === 'expense'}
+          activeColor="#FF3B30"
+          onPress={() => {
+            Haptics.selectionAsync();
+            setFilterType('expense');
+          }}
+        />
       </View>
 
-      {/* Main List */}
       {loading ? (
         <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#007AFF" />
+          <ActivityIndicator size="small" color="#007AFF" />
         </View>
       ) : transactions.length === 0 ? (
         <View className="flex-1 justify-center items-center px-6">
-          <Filter size={40} color="#3A3A3C" className="mb-3" />
-          <Text className="text-zinc-400 text-base text-center font-rounded">Nenhum lançamento encontrado</Text>
-          <Text className="text-zinc-600 text-xs text-center font-rounded mt-1">
-            Toque no botão "+" no topo para registrar uma nova transação.
+          <Filter size={36} color="#3A3A3C" />
+          <Text className="text-zinc-300 text-[15px] font-semibold mt-3">
+            Nenhum lançamento
+          </Text>
+          <Text className="text-zinc-500 text-[12px] text-center mt-1">
+            Toque no botão + acima para registrar uma transação.
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ paddingBottom: 100 }} className="flex-1 px-6 pt-4">
-          <View className="bg-zinc-900 border border-zinc-800 rounded-3xl overflow-hidden divide-y divide-zinc-800/80">
-            {transactions.map((tx) => (
-              <View key={tx.id} className="p-4 flex-row items-center justify-between">
-                <View className="flex-row items-center flex-1 mr-3">
-                  <View className={`w-10 h-10 rounded-2xl items-center justify-center mr-3 bg-zinc-800 border border-zinc-700`}>
-                    <Text className="text-zinc-400 font-bold text-xs">
-                      {tx.category.slice(0, 2).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View className="flex-1">
-                    <Text className="text-white font-semibold text-sm font-rounded" numberOfLines={1}>
-                      {tx.description || tx.category}
-                    </Text>
-                    <Text className="text-zinc-400 text-xs font-rounded mt-0.5">
-                      {tx.bank ? `${tx.bank} • ` : ''}
-                      {new Date(tx.date).toLocaleDateString('pt-BR', {
-                        day: 'numeric',
-                        month: 'short',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                      })}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View className="flex-row items-center space-x-3 gap-3">
+        <ScrollView
+          contentContainerStyle={{ paddingBottom: 100 }}
+          className="flex-1 px-5 pt-2"
+          showsVerticalScrollIndicator={false}
+        >
+          <View
+            className="rounded-3xl overflow-hidden"
+            style={{
+              backgroundColor: '#1C1C1E',
+              borderWidth: 1,
+              borderColor: '#2C2C2E',
+            }}
+          >
+            {transactions.map((tx, i) => (
+              <View
+                key={tx.id}
+                className="px-4 py-3 flex-row items-center"
+                style={{
+                  borderBottomWidth: i !== transactions.length - 1 ? 0.5 : 0,
+                  borderBottomColor: '#2C2C2E',
+                }}
+              >
+                <View
+                  className="items-center justify-center mr-3"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 12,
+                    backgroundColor: (CATEGORY_COLORS[tx.category] || '#48484A') + '22',
+                  }}
+                >
                   <Text
-                    className={`font-bold font-rounded text-base ${
-                      tx.type === 'income' ? 'text-green-500' : 'text-white'
-                    }`}
+                    className="font-bold text-[11px]"
+                    style={{ color: CATEGORY_COLORS[tx.category] || '#8E8E93' }}
                   >
-                    {tx.type === 'income' ? '+' : '-'} {formatCurrency(Math.abs(tx.amount))}
+                    {tx.category.slice(0, 2).toUpperCase()}
                   </Text>
-                  <TouchableOpacity onPress={() => handleDeleteTransaction(tx.id)} className="p-1">
-                    <Trash2 size={16} color="#FF3B30" />
-                  </TouchableOpacity>
                 </View>
+                <View className="flex-1 mr-3">
+                  <Text className="text-white text-[14px] font-medium" numberOfLines={1}>
+                    {tx.description || tx.category}
+                  </Text>
+                  <Text className="text-zinc-500 text-[11px] mt-0.5">
+                    {tx.bank ? `${tx.bank} • ` : ''}
+                    {new Date(tx.date).toLocaleDateString('pt-BR', {
+                      day: 'numeric',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </Text>
+                </View>
+
+                <Text
+                  className={`font-semibold text-[14px] mr-2 ${
+                    tx.type === 'income' ? 'text-green-500' : 'text-white'
+                  }`}
+                >
+                  {tx.type === 'income' ? '+' : '−'}
+                  {formatCurrency(Math.abs(tx.amount))}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => handleDeleteTransaction(tx.id)}
+                  hitSlop={8}
+                  activeOpacity={0.6}
+                >
+                  <Trash2 size={14} color="#FF3B30" />
+                </TouchableOpacity>
               </View>
             ))}
           </View>
         </ScrollView>
       )}
 
-      {/* Manual Input Modal */}
-      <Modal visible={isModalOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setIsModalOpen(false)}>
-        <View className="flex-1 bg-black px-6 pt-6">
-          <View className="flex-row justify-between items-center mb-6">
-            <Text className="text-white text-xl font-bold font-rounded">Novo Registro</Text>
-            <TouchableOpacity onPress={() => setIsModalOpen(false)} className="w-8 h-8 rounded-full bg-zinc-900 items-center justify-center">
-              <X size={18} color="white" />
+      {/* New transaction modal */}
+      <Modal
+        visible={isModalOpen}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setIsModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          className="flex-1 bg-black"
+        >
+          <View className="flex-row justify-between items-center px-6 pt-5 pb-2">
+            <Text className="text-white text-[20px] font-bold">Novo lançamento</Text>
+            <TouchableOpacity
+              onPress={() => setIsModalOpen(false)}
+              activeOpacity={0.6}
+              className="items-center justify-center"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: '#1C1C1E',
+              }}
+            >
+              <X size={16} color="white" />
             </TouchableOpacity>
           </View>
 
-          <ScrollView className="flex-1">
-            {/* Type Toggle */}
-            <View className="flex-row bg-zinc-900 p-1.5 rounded-2xl mb-6">
+          <ScrollView
+            className="flex-1 px-6 pt-4"
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Type toggle */}
+            <View
+              className="flex-row rounded-2xl p-1 mb-6"
+              style={{ backgroundColor: '#1C1C1E', borderWidth: 1, borderColor: '#2C2C2E' }}
+            >
               <TouchableOpacity
-                onPress={() => setType('expense')}
-                className={`flex-1 py-3 rounded-xl items-center ${
-                  type === 'expense' ? 'bg-red-500/10 border border-red-500/20' : 'bg-transparent'
-                }`}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setType('expense');
+                }}
+                className="flex-1 items-center justify-center"
+                style={{
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  backgroundColor:
+                    type === 'expense' ? 'rgba(255,59,48,0.12)' : 'transparent',
+                }}
               >
-                <Text className={`font-bold font-rounded text-sm ${type === 'expense' ? 'text-red-500' : 'text-zinc-500'}`}>
-                  Despesa (Saída)
+                <Text
+                  className="font-semibold text-[13px]"
+                  style={{ color: type === 'expense' ? '#FF3B30' : '#8E8E93' }}
+                >
+                  Saída
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => setType('income')}
-                className={`flex-1 py-3 rounded-xl items-center ${
-                  type === 'income' ? 'bg-green-500/10 border border-green-500/20' : 'bg-transparent'
-                }`}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setType('income');
+                }}
+                className="flex-1 items-center justify-center"
+                style={{
+                  paddingVertical: 10,
+                  borderRadius: 12,
+                  backgroundColor:
+                    type === 'income' ? 'rgba(52,199,89,0.12)' : 'transparent',
+                }}
               >
-                <Text className={`font-bold font-rounded text-sm ${type === 'income' ? 'text-green-500' : 'text-zinc-500'}`}>
-                  Receita (Entrada)
+                <Text
+                  className="font-semibold text-[13px]"
+                  style={{ color: type === 'income' ? '#34C759' : '#8E8E93' }}
+                >
+                  Entrada
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Amount input */}
-            <Text className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-2 font-rounded">Valor (R$)</Text>
-            <View className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 mb-4 flex-row items-center">
-              <Text className="text-white text-3xl font-black mr-2 font-rounded">R$</Text>
+            {/* Amount */}
+            <FieldLabel>Valor</FieldLabel>
+            <View
+              className="flex-row items-center rounded-2xl px-4 mb-5"
+              style={{
+                height: 70,
+                backgroundColor: '#1C1C1E',
+                borderWidth: 1,
+                borderColor: '#2C2C2E',
+              }}
+            >
+              <Text className="text-zinc-500 text-[24px] font-semibold mr-2">R$</Text>
               <TextInput
                 placeholder="0,00"
-                placeholderTextColor="#48484A"
-                keyboardType="numeric"
-                className="text-white text-3xl font-black flex-1 font-rounded h-10"
+                placeholderTextColor="#3A3A3C"
+                keyboardType="decimal-pad"
                 value={amount}
                 onChangeText={setAmount}
+                style={{
+                  flex: 1,
+                  color: 'white',
+                  fontSize: 32,
+                  fontWeight: '700',
+                  padding: 0,
+                  height: '100%',
+                  includeFontPadding: false,
+                }}
               />
             </View>
 
             {/* Description */}
-            <Text className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-2 font-rounded">Descrição</Text>
-            <TextInput
-              placeholder="ex: Compras de mercado, Cinema, PIX recebido"
-              placeholderTextColor="#48484A"
-              className="bg-zinc-900 border border-zinc-800 text-white rounded-2xl p-4 text-base font-rounded mb-4 h-14"
-              value={description}
-              onChangeText={setDescription}
-            />
+            <FieldLabel>Descrição</FieldLabel>
+            <View
+              className="flex-row items-center rounded-2xl px-4 mb-5"
+              style={{
+                height: 52,
+                backgroundColor: '#1C1C1E',
+                borderWidth: 1,
+                borderColor: '#2C2C2E',
+              }}
+            >
+              <TextInput
+                placeholder="ex: Mercado, Cinema, PIX recebido"
+                placeholderTextColor="#636366"
+                value={description}
+                onChangeText={setDescription}
+                style={{
+                  flex: 1,
+                  color: 'white',
+                  fontSize: 15,
+                  padding: 0,
+                  height: '100%',
+                  includeFontPadding: false,
+                }}
+              />
+            </View>
 
-            {/* Category Select */}
-            <Text className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-2 font-rounded">Categoria</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row mb-4">
-              {CATEGORIES.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  onPress={() => setCategory(cat)}
-                  className={`px-4 py-2.5 rounded-full mr-2 border ${
-                    category === cat ? 'bg-blue-600 border-blue-500' : 'bg-zinc-900 border-zinc-800'
-                  }`}
-                >
-                  <Text className={`text-sm font-semibold font-rounded ${category === cat ? 'text-white' : 'text-zinc-400'}`}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Category */}
+            <FieldLabel>Categoria</FieldLabel>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+              className="mb-5"
+            >
+              {CATEGORIES.map((cat) => {
+                const selected = category === cat;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setCategory(cat);
+                    }}
+                    activeOpacity={0.7}
+                    className="px-4 py-2.5 rounded-full mr-2"
+                    style={{
+                      backgroundColor: selected ? '#007AFF' : '#1C1C1E',
+                      borderWidth: 1,
+                      borderColor: selected ? '#007AFF' : '#2C2C2E',
+                    }}
+                  >
+                    <Text
+                      className="text-[13px] font-semibold"
+                      style={{ color: selected ? 'white' : '#8E8E93' }}
+                    >
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
-            {/* Bank Select */}
-            <Text className="text-zinc-400 text-xs font-semibold uppercase tracking-wider mb-2 font-rounded">Banco / Origem</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} className="flex-row mb-8">
-              {BANKS.map((b) => (
-                <TouchableOpacity
-                  key={b}
-                  onPress={() => setBank(b)}
-                  className={`px-4 py-2.5 rounded-full mr-2 border ${
-                    bank === b ? 'bg-purple-600 border-purple-500' : 'bg-zinc-900 border-zinc-800'
-                  }`}
-                >
-                  <Text className={`text-sm font-semibold font-rounded ${bank === b ? 'text-white' : 'text-zinc-400'}`}>
-                    {b}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Bank */}
+            <FieldLabel>Banco / Origem</FieldLabel>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 16 }}
+              className="mb-8"
+            >
+              {BANKS.map((b) => {
+                const selected = bank === b;
+                return (
+                  <TouchableOpacity
+                    key={b}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setBank(b);
+                    }}
+                    activeOpacity={0.7}
+                    className="px-4 py-2.5 rounded-full mr-2"
+                    style={{
+                      backgroundColor: selected ? '#1C1C1E' : 'transparent',
+                      borderWidth: 1,
+                      borderColor: selected ? '#48484A' : '#2C2C2E',
+                    }}
+                  >
+                    <Text
+                      className="text-[13px] font-semibold"
+                      style={{ color: selected ? 'white' : '#8E8E93' }}
+                    >
+                      {b}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
-            {/* Submit Button */}
             <TouchableOpacity
               onPress={handleAddTransaction}
               disabled={submitting}
-              className="w-full bg-blue-600 rounded-2xl py-4 items-center justify-center mb-10 shadow-lg shadow-blue-500/20 active:bg-blue-700"
+              activeOpacity={0.85}
+              className="rounded-2xl items-center justify-center mb-10"
+              style={{
+                height: 52,
+                backgroundColor: '#007AFF',
+                shadowColor: '#007AFF',
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 4 },
+              }}
             >
               {submitting ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <Text className="text-white font-bold text-base font-rounded">Salvar Lançamento</Text>
+                <Text className="text-white font-semibold text-[15px]">
+                  Salvar lançamento
+                </Text>
               )}
             </TouchableOpacity>
           </ScrollView>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
+  );
+}
+
+// ==================== Helpers ====================
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <Text className="text-zinc-500 text-[11px] font-semibold uppercase tracking-wider mb-2 ml-1">
+      {children}
+    </Text>
+  );
+}
+
+interface FilterChipProps {
+  label: string;
+  icon?: React.ReactNode;
+  active: boolean;
+  activeColor?: string;
+  onPress: () => void;
+}
+
+function FilterChip({ label, icon, active, activeColor = '#FFFFFF', onPress }: FilterChipProps) {
+  const bgColor = active
+    ? activeColor === '#FFFFFF'
+      ? '#1C1C1E'
+      : `${activeColor}1A`
+    : 'transparent';
+  const borderColor = active && activeColor !== '#FFFFFF' ? `${activeColor}33` : '#2C2C2E';
+  const textColor = active ? activeColor : '#8E8E93';
+
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.7}
+      className="flex-row items-center px-3.5 py-2 rounded-full"
+      style={{
+        backgroundColor: bgColor,
+        borderWidth: 1,
+        borderColor,
+        gap: 6,
+      }}
+    >
+      {icon}
+      <Text className="text-[13px] font-semibold" style={{ color: textColor }}>
+        {label}
+      </Text>
+    </TouchableOpacity>
   );
 }

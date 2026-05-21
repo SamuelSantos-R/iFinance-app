@@ -1,36 +1,49 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Image, Alert, AppState, Dimensions, ImageBackground } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Image,
+  Alert,
+  Pressable,
+  Animated,
+} from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
+import * as Haptics from 'expo-haptics';
 import { useAuth } from '@/context/auth-context';
-import { LucideIcon, ScanFace, ChevronLeft, Delete } from 'lucide-react-native';
-
-const { width } = Dimensions.get('window');
+import { ScanFace, ChevronLeft, Delete } from 'lucide-react-native';
 
 interface PinLockScreenProps {
   onUnlock: () => void;
-  isSettingPin?: boolean; // if true, this is used to configure a new PIN
+  isSettingPin?: boolean;
   onPinConfigured?: (pin: string) => void;
   onCancelSetting?: () => void;
 }
 
-export function PinLockScreen({ onUnlock, isSettingPin = false, onPinConfigured, onCancelSetting }: PinLockScreenProps) {
-  const { user, profile } = useAuth();
+export function PinLockScreen({
+  onUnlock,
+  isSettingPin = false,
+  onPinConfigured,
+  onCancelSetting,
+}: PinLockScreenProps) {
+  const { profile } = useAuth();
   const [pin, setPin] = useState('');
   const [confirmMode, setConfirmMode] = useState(false);
   const [tempPin, setTempPin] = useState('');
   const [greeting, setGreeting] = useState('Olá');
+  const shakeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Dynamic greeting based on time of day
     const hour = new Date().getHours();
     if (hour < 12) setGreeting('Bom dia');
     else if (hour < 18) setGreeting('Boa tarde');
     else setGreeting('Boa noite');
 
-    // Auto-trigger biometric auth if not in setup mode
     if (!isSettingPin) {
-      checkBiometricsAndAuthenticate();
+      // Delay so iOS has time to settle into 'active'
+      const t = setTimeout(checkBiometricsAndAuthenticate, 300);
+      return () => clearTimeout(t);
     }
   }, []);
 
@@ -41,31 +54,43 @@ export function PinLockScreen({ onUnlock, isSettingPin = false, onPinConfigured,
 
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !isEnrolled) return;
 
-      if (hasHardware && isEnrolled) {
-        const result = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Desbloquear iFinance',
-          fallbackLabel: 'Usar Código PIN',
-          disableDeviceFallback: false,
-        });
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: 'Desbloquear iFinance',
+        fallbackLabel: 'Usar código PIN',
+        cancelLabel: 'Cancelar',
+        disableDeviceFallback: false,
+      });
 
-        if (result.success) {
-          onUnlock();
-        }
+      if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        onUnlock();
       }
     } catch (error) {
-      console.error('Biometric authentication failed:', error);
+      console.warn('Biometric authentication failed:', error);
     }
+  };
+
+  const triggerShake = () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 12, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -12, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -8, duration: 60, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+    ]).start();
   };
 
   const handleKeyPress = async (num: string) => {
     if (pin.length >= 6) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     const newPin = pin + num;
     setPin(newPin);
 
     if (newPin.length === 6) {
-      // Small delay for visual feedback of the last dot lighting up
       setTimeout(async () => {
         if (isSettingPin) {
           if (!confirmMode) {
@@ -74,56 +99,64 @@ export function PinLockScreen({ onUnlock, isSettingPin = false, onPinConfigured,
             setConfirmMode(true);
           } else {
             if (newPin === tempPin) {
-              if (onPinConfigured) {
-                onPinConfigured(newPin);
-              }
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              onPinConfigured?.(newPin);
             } else {
-              Alert.alert('Erro', 'Os códigos PIN não coincidem. Tente novamente.');
-              setPin('');
-              setTempPin('');
-              setConfirmMode(false);
+              triggerShake();
+              setTimeout(() => {
+                setPin('');
+                setTempPin('');
+                setConfirmMode(false);
+              }, 400);
             }
           }
         } else {
-          // Verify PIN
           const storedPin = await SecureStore.getItemAsync('user_pin');
           if (newPin === storedPin) {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             onUnlock();
           } else {
-            Alert.alert('Código Incorreto', 'O PIN inserido está incorreto. Tente novamente.');
-            setPin('');
+            triggerShake();
+            setTimeout(() => setPin(''), 400);
           }
         }
-      }, 200);
+      }, 180);
     }
   };
 
   const handleBackspace = () => {
+    if (pin.length === 0) return;
+    Haptics.selectionAsync();
     setPin(pin.slice(0, -1));
   };
 
   const handleBiometricClick = async () => {
     if (isSettingPin) return;
-
     try {
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
 
       if (!hasHardware || !isEnrolled) {
-        Alert.alert('Biometria Indisponível', 'Face ID ou Touch ID não configurado neste dispositivo.');
+        Alert.alert(
+          'Biometria indisponível',
+          'Face ID ou Touch ID não configurado neste dispositivo.'
+        );
         return;
       }
 
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: 'Desbloquear iFinance',
+        fallbackLabel: 'Usar código PIN',
+        cancelLabel: 'Cancelar',
         disableDeviceFallback: false,
       });
 
       if (result.success) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         onUnlock();
       }
-    } catch (error: any) {
-      console.error('Biometric authentication failed:', error);
+    } catch (error) {
+      console.warn('Biometric authentication failed:', error);
     }
   };
 
@@ -132,146 +165,204 @@ export function PinLockScreen({ onUnlock, isSettingPin = false, onPinConfigured,
     return profile.full_name.split(' ')[0];
   };
 
+  const title = isSettingPin
+    ? confirmMode
+      ? 'Confirme seu PIN'
+      : 'Crie um PIN de 6 dígitos'
+    : `${greeting}, ${getFirstName()}`;
+
+  const subtitle = isSettingPin
+    ? 'Acesso rápido protegido por código.'
+    : 'Digite seu código para desbloquear.';
+
   return (
-    <ImageBackground 
-      source={require('../../assets/images/mesh_lockscreen_bg.png')} 
-      style={{ flex: 1 }}
-      resizeMode="cover"
-    >
-      <View className="flex-1 justify-between py-20 px-8 bg-black/30">
-        {/* Top Section */}
-        <View className="items-center mt-12">
-          {isSettingPin && onCancelSetting && (
-            <TouchableOpacity 
-              onPress={onCancelSetting}
-              className="absolute left-0 top-0 w-10 h-10 rounded-full bg-zinc-900/60 border border-zinc-800/80 items-center justify-center"
-            >
-              <ChevronLeft size={22} color="white" />
-            </TouchableOpacity>
-          )}
+    <View className="flex-1 bg-black justify-between" style={{ paddingTop: 72, paddingBottom: 48 }}>
+      {/* Top - cancel button if setting */}
+      {isSettingPin && onCancelSetting && (
+        <View className="absolute left-4 z-10" style={{ top: 56 }}>
+          <TouchableOpacity
+            onPress={onCancelSetting}
+            activeOpacity={0.6}
+            className="bg-zinc-900 border border-zinc-800 items-center justify-center"
+            style={{ width: 40, height: 40, borderRadius: 20 }}
+          >
+            <ChevronLeft size={22} color="white" />
+          </TouchableOpacity>
+        </View>
+      )}
 
-          <View className="w-24 h-24 rounded-full border border-white/20 items-center justify-center overflow-hidden mb-6 shadow-2xl">
-            {profile?.avatar_url ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                className="w-full h-full"
-                resizeMode="cover"
-              />
-            ) : (
-              <Text className="text-white text-3xl font-bold font-rounded">
-                {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
-              </Text>
-            )}
-          </View>
-
-          <Text className="text-white text-2xl font-semibold font-rounded tracking-tight text-center">
-            {isSettingPin 
-              ? (confirmMode ? 'Confirme seu PIN' : 'Defina um PIN de 6 dígitos')
-              : `${greeting}, ${getFirstName()}!`
-            }
-          </Text>
-          {isSettingPin && (
-            <Text className="text-zinc-400 text-sm mt-1 font-rounded">
-              Crie uma senha de acesso rápido
+      {/* Header */}
+      <View className="items-center px-8">
+        <View
+          className="rounded-full overflow-hidden items-center justify-center mb-6"
+          style={{
+            width: 72,
+            height: 72,
+            backgroundColor: '#1C1C1E',
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.08)',
+          }}
+        >
+          {profile?.avatar_url ? (
+            <Image
+              source={{ uri: profile.avatar_url }}
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="cover"
+            />
+          ) : (
+            <Text className="text-white text-2xl font-bold">
+              {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
             </Text>
           )}
         </View>
 
-        {/* Dots Indicator */}
-        <View className="flex-row justify-center gap-5 my-10">
-          {[...Array(6)].map((_, i) => (
-            <View
-              key={i}
-              style={{ width: 18, height: 18 }}
-              className={`rounded-full ${
-                i < pin.length 
-                  ? 'bg-zinc-200 shadow-md shadow-white/30' 
-                  : 'bg-white/10 border border-white/25'
-              }`}
-            />
-          ))}
-        </View>
+        <Text className="text-white text-[22px] font-semibold tracking-tight text-center">
+          {title}
+        </Text>
+        <Text className="text-zinc-500 text-[14px] mt-2 text-center">{subtitle}</Text>
 
-        {/* Keyboard */}
-        <View className="items-center mb-8">
-          {/* Rows 1-3 */}
-          {[
-            ['1', '2', '3'],
-            ['4', '5', '6'],
-            ['7', '8', '9']
-          ].map((row, rowIndex) => (
-            <View key={rowIndex} className="flex-row justify-center gap-6 mb-5" style={{ width: width * 0.85 }}>
-              {row.map((num) => (
-                <TouchableOpacity
-                  key={num}
-                  onPress={() => handleKeyPress(num)}
-                  style={{ width: 75, height: 75 }}
-                  className="rounded-full bg-white/10 border border-white/15 items-center justify-center active:bg-white/25 shadow-sm"
-                >
-                  <Text className="text-white text-3xl font-normal font-rounded">{num}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          ))}
+        {/* Dots */}
+        <Animated.View
+          className="flex-row mt-10"
+          style={{ gap: 18, transform: [{ translateX: shakeAnim }] }}
+        >
+          {[...Array(6)].map((_, i) => {
+            const filled = i < pin.length;
+            return (
+              <View
+                key={i}
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 7,
+                  backgroundColor: filled ? '#FFFFFF' : 'transparent',
+                  borderWidth: filled ? 0 : 1.5,
+                  borderColor: 'rgba(255,255,255,0.25)',
+                }}
+              />
+            );
+          })}
+        </Animated.View>
+      </View>
 
-          {/* Row 4 (FaceID - 0 - Backspace) */}
-          <View className="flex-row justify-center gap-6 items-center" style={{ width: width * 0.85 }}>
-            {/* Biometrics Toggle Button */}
-            {isSettingPin ? (
-              <View style={{ width: 75, height: 75 }} className="opacity-0" />
-            ) : (
-              <TouchableOpacity
-                onPress={handleBiometricClick}
-                style={{ width: 75, height: 75 }}
-                className="rounded-full bg-white/10 border border-white/15 items-center justify-center active:bg-white/25 shadow-sm"
-              >
-                <ScanFace size={28} color="white" />
-              </TouchableOpacity>
-            )}
-
-            {/* 0 Button */}
-            <TouchableOpacity
-              onPress={() => handleKeyPress('0')}
-              style={{ width: 75, height: 75 }}
-              className="rounded-full bg-white/10 border border-white/15 items-center justify-center active:bg-white/25 shadow-sm"
-            >
-              <Text className="text-white text-3xl font-normal font-rounded">0</Text>
-            </TouchableOpacity>
-
-            {/* Backspace Button - borderless to fit layout beautifully */}
-            <TouchableOpacity
-              onPress={handleBackspace}
-              disabled={pin.length === 0}
-              style={{ width: 75, height: 75 }}
-              className={`items-center justify-center active:opacity-60 ${
-                pin.length === 0 ? 'opacity-0' : 'opacity-80'
-              }`}
-            >
-              <Delete size={26} color="white" />
-            </TouchableOpacity>
+      {/* Keypad */}
+      <View className="px-12">
+        {[
+          ['1', '2', '3'],
+          ['4', '5', '6'],
+          ['7', '8', '9'],
+        ].map((row) => (
+          <View
+            key={row.join('')}
+            className="flex-row justify-between"
+            style={{ marginBottom: 18 }}
+          >
+            {row.map((num) => (
+              <KeypadButton key={num} value={num} onPress={() => handleKeyPress(num)} />
+            ))}
           </View>
+        ))}
+
+        {/* Bottom row */}
+        <View className="flex-row justify-between items-center" style={{ marginBottom: 4 }}>
+          {/* Face ID button */}
+          {isSettingPin ? (
+            <View style={{ width: 72, height: 72 }} />
+          ) : (
+            <KeypadButton
+              onPress={handleBiometricClick}
+              icon={<ScanFace size={26} color="white" strokeWidth={1.6} />}
+              ghost
+            />
+          )}
+
+          <KeypadButton value="0" onPress={() => handleKeyPress('0')} />
+
+          {pin.length > 0 ? (
+            <KeypadButton
+              onPress={handleBackspace}
+              icon={<Delete size={24} color="white" strokeWidth={1.6} />}
+              ghost
+            />
+          ) : (
+            <View style={{ width: 72, height: 72 }} />
+          )}
         </View>
 
-        {/* Forgot PIN / Reset Link */}
-        {!isSettingPin ? (
-          <TouchableOpacity 
+        {/* Forgot link */}
+        {!isSettingPin && (
+          <TouchableOpacity
             onPress={() => {
               Alert.alert(
-                'Esqueceu a senha?',
-                'Para redefinir o PIN, faça logout da sua conta e entre novamente usando e-mail/senha ou Google.',
-                [{ text: 'Entendido' }]
+                'Esqueceu o código?',
+                'Faça logout e entre novamente para redefinir seu PIN.',
+                [{ text: 'OK' }]
               );
             }}
-            className="items-center py-2"
+            activeOpacity={0.5}
+            className="items-center"
+            style={{ marginTop: 24 }}
           >
-            <Text className="text-zinc-400 text-sm font-semibold font-rounded tracking-wide">
-              Esqueceu sua senha?
-            </Text>
+            <Text className="text-zinc-500 text-[13px]">Esqueceu sua senha?</Text>
           </TouchableOpacity>
-        ) : (
-          <View className="h-8" />
         )}
       </View>
-    </ImageBackground>
+    </View>
+  );
+}
+
+// ==================== Keypad Button ====================
+interface KeypadButtonProps {
+  value?: string;
+  icon?: React.ReactNode;
+  ghost?: boolean;
+  onPress: () => void;
+}
+
+function KeypadButton({ value, icon, ghost, onPress }: KeypadButtonProps) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.92,
+      useNativeDriver: true,
+      speed: 50,
+      bounciness: 0,
+    }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 30,
+      bounciness: 6,
+    }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      style={{ width: 72, height: 72 }}
+    >
+      <Animated.View
+        style={{
+          width: 72,
+          height: 72,
+          borderRadius: 36,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: ghost ? 'transparent' : 'rgba(255,255,255,0.07)',
+          transform: [{ scale }],
+        }}
+      >
+        {value ? (
+          <Text style={{ color: 'white', fontSize: 30, fontWeight: '300' }}>{value}</Text>
+        ) : (
+          icon
+        )}
+      </Animated.View>
+    </Pressable>
   );
 }

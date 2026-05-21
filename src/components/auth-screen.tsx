@@ -1,10 +1,32 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Alert } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Alert,
+} from 'react-native';
 import { useAuth } from '@/context/auth-context';
-import { Lock, Mail, User, ShieldAlert, Sparkles, Eye, EyeOff, ChevronLeft, BarChart3 } from 'lucide-react-native';
+import {
+  Lock,
+  Mail,
+  User,
+  ShieldAlert,
+  Eye,
+  EyeOff,
+  ChevronLeft,
+  Wallet,
+} from 'lucide-react-native';
 import { Image } from 'expo-image';
+import * as AppleAuthentication from 'expo-apple-authentication';
 
 type Step = 'landing' | 'form';
+
+const INPUT_HEIGHT = 56;
 
 export function AuthScreen() {
   const { signIn, signUp, signInWithApple, signInWithGoogle } = useAuth();
@@ -17,6 +39,15 @@ export function AuthScreen() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS === 'ios') {
+      AppleAuthentication.isAvailableAsync()
+        .then(setAppleAvailable)
+        .catch(() => setAppleAvailable(false));
+    }
+  }, []);
 
   const handleAuth = async () => {
     if (!email || !password) {
@@ -37,7 +68,7 @@ export function AuthScreen() {
         if (signUpError) {
           setError(signUpError.message || 'Erro ao cadastrar. Tente novamente.');
         } else {
-          alert('Conta criada com sucesso! Você já pode fazer login.');
+          Alert.alert('Pronto!', 'Conta criada com sucesso. Você já pode entrar.');
           setIsSignUp(false);
         }
       } else {
@@ -64,11 +95,17 @@ export function AuthScreen() {
     setError(null);
   };
 
-
   const handleGoogleSignIn = async () => {
     const { error } = await signInWithGoogle();
     if (error) {
-      Alert.alert('Erro', error);
+      Alert.alert('Erro ao entrar com Google', typeof error === 'string' ? error : error?.message ?? '');
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    const { error } = await signInWithApple();
+    if (error) {
+      Alert.alert('Erro ao entrar com Apple', typeof error === 'string' ? error : error?.message ?? '');
     }
   };
 
@@ -76,63 +113,97 @@ export function AuthScreen() {
   if (step === 'landing') {
     return (
       <View className="flex-1 bg-black">
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} className="px-8">
+        <ScrollView
+          contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
+          className="px-8"
+          showsVerticalScrollIndicator={false}
+        >
           {/* Logo & Headline */}
           <View className="items-center mb-12">
-            <View className="w-20 h-20 bg-blue-600 rounded-3xl items-center justify-center mb-8 shadow-lg shadow-blue-500/30">
-              <BarChart3 size={40} color="white" />
+            <View
+              className="bg-blue-600 items-center justify-center mb-8"
+              style={{
+                width: 80,
+                height: 80,
+                borderRadius: 24,
+                shadowColor: '#007AFF',
+                shadowOpacity: 0.4,
+                shadowRadius: 24,
+                shadowOffset: { width: 0, height: 8 },
+              }}
+            >
+              <Wallet size={38} color="white" strokeWidth={2.2} />
             </View>
-            <Text className="text-2xl font-bold text-white text-center tracking-tight">
-              É hora de iniciar sua jornada!
+            <Text className="text-[28px] font-bold text-white text-center tracking-tight">
+              Suas finanças, no controle.
             </Text>
-            <Text className="text-zinc-400 text-sm mt-3 text-center leading-5">
-              Crie sua conta e comece a transformar{'\n'}suas finanças.
+            <Text className="text-zinc-400 text-[15px] mt-3 text-center leading-5">
+              Acompanhe gastos, receitas e tenha clareza{'\n'}sobre seu dinheiro em tempo real.
             </Text>
           </View>
 
           {/* Buttons */}
-          <View className="gap-4 mb-8">
+          <View className="gap-3 mb-8">
+            {Platform.OS === 'ios' && appleAvailable && (
+              <AppleAuthentication.AppleAuthenticationButton
+                buttonType={AppleAuthentication.AppleAuthenticationButtonType.CONTINUE}
+                buttonStyle={AppleAuthentication.AppleAuthenticationButtonStyle.WHITE}
+                cornerRadius={16}
+                style={{ width: '100%', height: 52 }}
+                onPress={handleAppleSignIn}
+              />
+            )}
+
             <TouchableOpacity
               onPress={handleGoogleSignIn}
-              className="w-full bg-transparent border border-zinc-700 rounded-2xl py-4 flex-row items-center justify-center active:bg-zinc-900 gap-3"
+              activeOpacity={0.7}
+              className="w-full bg-white flex-row items-center justify-center"
+              style={{ height: 52, borderRadius: 16, gap: 10 }}
             >
-              <Image 
-                source="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" 
-                style={{ width: 20, height: 20 }}
+              <Image
+                source="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg"
+                style={{ width: 18, height: 18 }}
                 contentFit="contain"
               />
-              <Text className="text-white font-bold text-base">
+              <Text className="text-black font-semibold text-[15px]">
                 Continuar com Google
               </Text>
             </TouchableOpacity>
 
-            {/* Continuar com E-mail (Primary - filled) */}
             <TouchableOpacity
               onPress={() => goToForm(true)}
-              className="w-full bg-blue-600 rounded-2xl py-4 flex-row items-center justify-center active:bg-blue-700 shadow-lg shadow-blue-500/20"
+              activeOpacity={0.7}
+              className="w-full bg-blue-600 flex-row items-center justify-center"
+              style={{
+                height: 52,
+                borderRadius: 16,
+                gap: 10,
+                shadowColor: '#007AFF',
+                shadowOpacity: 0.3,
+                shadowRadius: 12,
+                shadowOffset: { width: 0, height: 4 },
+              }}
             >
-              <Mail size={20} color="white" />
-              <Text className="text-white font-bold text-base ml-3">
+              <Mail size={18} color="white" strokeWidth={2.2} />
+              <Text className="text-white font-semibold text-[15px]">
                 Continuar com E-mail
               </Text>
             </TouchableOpacity>
           </View>
 
           {/* Entrar link */}
-          <TouchableOpacity
-            onPress={() => goToForm(false)}
-            className="items-center py-2"
-          >
-            <Text className="text-blue-500 font-semibold text-base">
-              Entrar
+          <TouchableOpacity onPress={() => goToForm(false)} className="items-center py-2">
+            <Text className="text-zinc-400 text-[14px]">
+              Já tem uma conta?{' '}
+              <Text className="text-blue-500 font-semibold">Entrar</Text>
             </Text>
           </TouchableOpacity>
         </ScrollView>
 
         {/* Terms - fixed at bottom */}
-        <View className="px-8 pb-5 pt-4">
-          <Text className="text-zinc-600 text-xs text-center leading-4">
-            Ao continuar você estará concordando com os{' '}
+        <View className="px-8 pb-8 pt-4">
+          <Text className="text-zinc-600 text-[11px] text-center leading-4">
+            Ao continuar você concorda com os{' '}
             <Text className="text-zinc-400 underline">Termos de Uso</Text> e{' '}
             <Text className="text-zinc-400 underline">Privacidade</Text>.
           </Text>
@@ -147,131 +218,167 @@ export function AuthScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       className="flex-1 bg-black"
     >
-      {/* Back button */}
-      <View className="px-4 pt-14">
+      <View className="px-5 pt-14">
         <TouchableOpacity
           onPress={goBack}
-          className="w-10 h-10 rounded-full bg-zinc-900 border border-zinc-800 items-center justify-center"
+          activeOpacity={0.6}
+          className="bg-zinc-900 border border-zinc-800 items-center justify-center"
+          style={{ width: 40, height: 40, borderRadius: 20 }}
         >
           <ChevronLeft size={22} color="white" />
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }} className="px-8">
-        {/* Header */}
-        <View className="items-center mb-8">
-          <View className="w-16 h-16 bg-blue-600 rounded-2xl items-center justify-center mb-5 shadow-lg shadow-blue-500/30">
-            <Sparkles size={32} color="white" />
-          </View>
-          <Text className="text-2xl font-bold text-white text-center tracking-tight">
-            {isSignUp ? 'Criar nova conta' : 'Bem-vindo de volta!'}
+      <ScrollView
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingBottom: 40 }}
+        className="px-8"
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View className="items-center mb-10">
+          <Text className="text-[28px] font-bold text-white text-center tracking-tight">
+            {isSignUp ? 'Crie sua conta' : 'Bem-vindo de volta'}
           </Text>
-          <Text className="text-zinc-400 text-sm mt-2 text-center">
-            {isSignUp ? 'Preencha os dados para começar' : 'Entre com suas credenciais'}
+          <Text className="text-zinc-400 text-[15px] mt-2 text-center">
+            {isSignUp ? 'Leva menos de um minuto.' : 'Entre com suas credenciais.'}
           </Text>
         </View>
 
-        {/* Error */}
         {error && (
-          <View className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex-row items-center mb-6 gap-3">
-            <ShieldAlert size={20} color="#FF3B30" />
-            <Text className="text-red-400 text-sm flex-1">{error}</Text>
+          <View className="bg-red-500/10 border border-red-500/20 rounded-2xl p-4 flex-row items-center mb-5 gap-3">
+            <ShieldAlert size={18} color="#FF3B30" />
+            <Text className="text-red-400 text-[13px] flex-1">{error}</Text>
           </View>
         )}
 
-        {/* Sign-up only fields */}
         {isSignUp && (
-          <View className="gap-4 mb-4">
-            <View className="flex-row items-center bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 gap-3">
-              <User size={20} color="#636366" />
-              <TextInput
-                placeholder="Nome completo"
-                placeholderTextColor="#636366"
-                className="text-white flex-1 text-base"
-                value={fullName}
-                onChangeText={setFullName}
-                autoCapitalize="words"
-              />
-            </View>
-
-            <View className="flex-row items-center bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 gap-3">
-              <User size={20} color="#636366" />
-              <TextInput
-                placeholder="Nome de usuário"
-                placeholderTextColor="#636366"
-                className="text-white flex-1 text-base"
-                value={username}
-                onChangeText={setUsername}
-                autoCapitalize="none"
-              />
-            </View>
+          <View className="gap-3 mb-3">
+            <InputRow
+              icon={<User size={18} color="#8E8E93" strokeWidth={2} />}
+              placeholder="Nome completo"
+              value={fullName}
+              onChangeText={setFullName}
+              autoCapitalize="words"
+            />
+            <InputRow
+              icon={<User size={18} color="#8E8E93" strokeWidth={2} />}
+              placeholder="Nome de usuário"
+              value={username}
+              onChangeText={setUsername}
+              autoCapitalize="none"
+            />
           </View>
         )}
 
-        {/* Email & Password */}
-        <View className="gap-4 mb-6">
-          <View className="flex-row items-center bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 gap-3">
-            <Mail size={20} color="#636366" />
-            <TextInput
-              placeholder="Seu e-mail"
-              placeholderTextColor="#636366"
-              className="text-white flex-1 text-base"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-          </View>
-
-          <View className="flex-row items-center bg-zinc-900 border border-zinc-800 rounded-2xl px-4 py-4 gap-3">
-            <Lock size={20} color="#636366" />
-            <TextInput
-              placeholder="Sua senha"
-              placeholderTextColor="#636366"
-              className="text-white flex-1 text-base"
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              autoCapitalize="none"
-            />
-            <TouchableOpacity onPress={() => setShowPassword(!showPassword)} className="p-1">
-              {showPassword ? (
-                <EyeOff size={20} color="#636366" />
-              ) : (
-                <Eye size={20} color="#636366" />
-              )}
-            </TouchableOpacity>
-          </View>
+        <View className="gap-3 mb-6">
+          <InputRow
+            icon={<Mail size={18} color="#8E8E93" strokeWidth={2} />}
+            placeholder="Seu e-mail"
+            value={email}
+            onChangeText={setEmail}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+          <InputRow
+            icon={<Lock size={18} color="#8E8E93" strokeWidth={2} />}
+            placeholder="Sua senha"
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry={!showPassword}
+            autoCapitalize="none"
+            trailing={
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={8}
+                activeOpacity={0.6}
+              >
+                {showPassword ? (
+                  <EyeOff size={18} color="#8E8E93" />
+                ) : (
+                  <Eye size={18} color="#8E8E93" />
+                )}
+              </TouchableOpacity>
+            }
+          />
         </View>
 
-        {/* Submit Button */}
         <TouchableOpacity
           onPress={handleAuth}
           disabled={loading}
-          className="w-full bg-blue-600 rounded-2xl py-4 items-center mb-5 active:bg-blue-700 shadow-lg shadow-blue-500/20"
+          activeOpacity={0.85}
+          className="w-full bg-blue-600 items-center justify-center mb-4"
+          style={{
+            height: INPUT_HEIGHT,
+            borderRadius: 16,
+            shadowColor: '#007AFF',
+            shadowOpacity: 0.3,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 4 },
+          }}
         >
           {loading ? (
             <ActivityIndicator color="white" />
           ) : (
-            <Text className="text-white font-bold text-base">
-              {isSignUp ? 'Cadastrar' : 'Entrar'}
+            <Text className="text-white font-semibold text-[15px]">
+              {isSignUp ? 'Criar conta' : 'Entrar'}
             </Text>
           )}
         </TouchableOpacity>
 
-        {/* Toggle Sign In / Sign Up */}
         <TouchableOpacity
           onPress={() => {
             setIsSignUp(!isSignUp);
             setError(null);
           }}
+          activeOpacity={0.6}
           className="items-center py-2"
         >
-          <Text className="text-blue-500 font-semibold text-sm">
-            {isSignUp ? 'Já tem uma conta? Entrar' : 'Novo por aqui? Criar conta'}
+          <Text className="text-zinc-400 text-[14px]">
+            {isSignUp ? 'Já tem uma conta? ' : 'Novo por aqui? '}
+            <Text className="text-blue-500 font-semibold">
+              {isSignUp ? 'Entrar' : 'Criar conta'}
+            </Text>
           </Text>
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
+  );
+}
+
+// ==================== INPUT COMPONENT ====================
+interface InputRowProps extends React.ComponentProps<typeof TextInput> {
+  icon: React.ReactNode;
+  trailing?: React.ReactNode;
+}
+
+function InputRow({ icon, trailing, style, ...textInputProps }: InputRowProps) {
+  return (
+    <View
+      className="flex-row items-center bg-zinc-900 border border-zinc-800"
+      style={{
+        height: INPUT_HEIGHT,
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        gap: 12,
+      }}
+    >
+      {icon}
+      <TextInput
+        placeholderTextColor="#636366"
+        style={[
+          {
+            flex: 1,
+            color: 'white',
+            fontSize: 15,
+            height: '100%',
+            paddingVertical: 0,
+            includeFontPadding: false,
+          },
+          style,
+        ]}
+        {...textInputProps}
+      />
+      {trailing}
+    </View>
   );
 }

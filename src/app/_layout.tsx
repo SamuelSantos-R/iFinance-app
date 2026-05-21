@@ -1,67 +1,84 @@
 import '@/global.css';
-import React, { useState, useEffect } from 'react';
-import { useColorScheme, ActivityIndicator, View, AppState, AppStateStatus } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { ActivityIndicator, View, AppState, AppStateStatus } from 'react-native';
 import { Tabs } from 'expo-router';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { AuthScreen } from '@/components/auth-screen';
 import { PinLockScreen } from '@/components/pin-lock-screen';
 import * as SecureStore from 'expo-secure-store';
+import * as Notifications from 'expo-notifications';
 import { Home, Receipt, Smartphone, User } from 'lucide-react-native';
+
+// Background fetch handler for notifications (idle config)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: false,
+    shouldSetBadge: false,
+  }),
+});
 
 function AppContent() {
   const { session, loading } = useAuth();
-  const colorScheme = useColorScheme();
   const [isAppLocked, setIsAppLocked] = useState(false);
   const [checkingPin, setCheckingPin] = useState(true);
+  // tracks last "real" state (foreground vs background), ignoring transient `inactive` from FaceID prompts
+  const lastRealStateRef = useRef<AppStateStatus>('active');
 
-  // Check if PIN lock is enabled on mount
+  const refreshLockStatus = async (force = false) => {
+    if (!session) {
+      setIsAppLocked(false);
+      return;
+    }
+    try {
+      const storedPin = await SecureStore.getItemAsync('user_pin');
+      if (storedPin) {
+        if (force) setIsAppLocked(true);
+        return !!storedPin;
+      }
+      return false;
+    } catch (e) {
+      console.warn('Failed to load PIN status:', e);
+      return false;
+    }
+  };
+
   useEffect(() => {
-    async function checkPinStatus() {
+    async function init() {
       if (session) {
-        try {
-          const storedPin = await SecureStore.getItemAsync('user_pin');
-          if (storedPin) {
-            setIsAppLocked(true);
-          }
-        } catch (e) {
-          console.error('Failed to load PIN status:', e);
-        }
+        await refreshLockStatus(true);
+      } else {
+        setIsAppLocked(false);
       }
       setCheckingPin(false);
     }
-    checkPinStatus();
+    init();
   }, [session]);
 
-  // Listen to AppState changes (to lock app when coming back from background)
   useEffect(() => {
-    let prevAppState = AppState.currentState;
-
-    const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-      // Only lock if the app was in the background (user closed or locked the phone)
-      // and is now coming back to active. System dialogs like FaceID trigger 'inactive', which we ignore.
-      if (prevAppState === 'background' && nextAppState === 'active' && session) {
-        try {
-          const storedPin = await SecureStore.getItemAsync('user_pin');
-          if (storedPin) {
-            setIsAppLocked(true);
-          }
-        } catch (e) {
-          console.error('Failed to load PIN status on resume:', e);
-        }
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
+      // Only treat background as a "real" background event.
+      // `inactive` triggers when iOS shows FaceID/Apple/Notification prompts — ignore those.
+      if (nextAppState === 'background') {
+        lastRealStateRef.current = 'background';
+        return;
       }
-      prevAppState = nextAppState;
-    };
-
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => {
-      subscription.remove();
-    };
+      if (nextAppState === 'active') {
+        if (lastRealStateRef.current === 'background' && session) {
+          const storedPin = await SecureStore.getItemAsync('user_pin');
+          if (storedPin) setIsAppLocked(true);
+        }
+        lastRealStateRef.current = 'active';
+      }
+    });
+    return () => subscription.remove();
   }, [session]);
 
   if (loading || checkingPin) {
     return (
       <View className="flex-1 bg-black justify-center items-center">
-        <ActivityIndicator size="large" color="#007AFF" />
+        <ActivityIndicator size="small" color="#007AFF" />
       </View>
     );
   }
@@ -74,7 +91,6 @@ function AppContent() {
     return <PinLockScreen onUnlock={() => setIsAppLocked(false)} />;
   }
 
-  // Standard, stable Expo Router Tabs
   return (
     <Tabs
       screenOptions={{

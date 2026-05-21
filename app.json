@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "first-app",
+    "name": "iFinance",
     "slug": "first-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,13 +9,20 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.heatz.ifinance",
+      "supportsTablet": false,
+      "usesAppleSignIn": true,
       "infoPlist": {
-        "NSFaceIDUsageDescription": "Use o Face ID para acessar sua conta de forma rápida e segura."
+        "NSFaceIDUsageDescription": "Use o Face ID para acessar sua conta de forma rápida e segura.",
+        "NSPhotoLibraryUsageDescription": "Precisamos acessar suas fotos para você escolher a foto de perfil.",
+        "NSCameraUsageDescription": "Precisamos da câmera para você tirar uma foto de perfil.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "LSApplicationQueriesSchemes": ["shortcuts"]
       }
     },
     "android": {
+      "package": "com.heatz.ifinance",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -31,16 +38,16 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
-          "android": {
-            "image": "./assets/images/splash-icon.png",
-            "imageWidth": 76
-          }
+          "backgroundColor": "#000000",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 96,
+          "resizeMode": "contain"
         }
       ],
       "expo-font",
       "expo-secure-store",
       "expo-web-browser",
+      "expo-apple-authentication",
       [
         "expo-local-authentication",
         {

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Platform, Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
 import * as ImagePicker from 'expo-image-picker';
@@ -9,6 +10,8 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
 WebBrowser.maybeCompleteAuthSession();
+
+const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
 
 interface Profile {
   id: string;
@@ -41,7 +44,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Fetch user profile from Supabase
   const fetchProfile = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -51,12 +53,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .single();
 
       if (error) {
-        console.error('Error fetching profile:', error);
+        console.warn('Error fetching profile:', error.message);
       } else {
         setProfile(data);
       }
     } catch (err) {
-      console.error('Error in fetchProfile:', err);
+      console.warn('Error in fetchProfile:', err);
     }
   };
 
@@ -67,7 +69,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    // Check active session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -77,8 +78,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
       if (session?.user) {
@@ -89,24 +91,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setLoading(false);
     });
 
+    // Listen for OAuth deep-link callbacks (Google, etc.)
+    const handleDeepLink = async (url: string) => {
+      const parsed = Linking.parse(url);
+      const params = parsed.queryParams ?? {};
+      const access_token = params.access_token as string | undefined;
+      const refresh_token = params.refresh_token as string | undefined;
+
+      if (access_token) {
+        await supabase.auth.setSession({
+          access_token,
+          refresh_token: refresh_token ?? '',
+        });
+      }
+    };
+
+    Linking.getInitialURL().then((url) => {
+      if (url) handleDeepLink(url);
+    });
+    const linkingSub = Linking.addEventListener('url', ({ url }) => handleDeepLink(url));
+
     return () => {
       subscription.unsubscribe();
+      linkingSub.remove();
     };
   }, []);
 
   const signIn = async (email: string, password: string) => {
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
     return { error };
   };
 
   const signUp = async (email: string, password: string, fullName: string, username: string) => {
     setLoading(true);
-    // Sign up the user
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -118,12 +137,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
-    // If successful and profile wasn't auto-created or we want to ensure it, we can wait a bit
     if (!error && data.user) {
-      // Small delay to let trigger finish
       setTimeout(async () => {
         if (data.user) {
-          // If trigger fails or is slow, we can upsert
           await supabase.from('profiles').upsert({
             id: data.user.id,
             full_name: fullName,
@@ -144,15 +160,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       setLoading(true);
 
-      // Generate a random nonce for security
-      const rawNonce = Crypto.getRandomBytes(16)
-        .reduce((acc, byte) => acc + byte.toString(16).padStart(2, '0'), '');
+      const rawNonce = Array.from(Crypto.getRandomBytes(16))
+        .map((b) => b.toString(16).padStart(2, '0'))
+        .join('');
       const hashedNonce = await Crypto.digestStringAsync(
         Crypto.CryptoDigestAlgorithm.SHA256,
         rawNonce
       );
 
-      // Request Apple Sign In credential
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
           AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
@@ -167,7 +182,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return { error: 'Não foi possível obter o token da Apple.' };
       }
 
-      // Sign in with Supabase using the Apple ID token
       const { data, error } = await supabase.auth.signInWithIdToken({
         provider: 'apple',
         token: idToken,
@@ -175,7 +189,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
 
       if (!error && data.user) {
-        // Update profile with Apple name if available
         const fullName = credential.fullName
           ? `${credential.fullName.givenName || ''} ${credential.fullName.familyName || ''}`.trim()
           : null;
@@ -194,22 +207,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err: any) {
       setLoading(false);
       if (err.code === 'ERR_REQUEST_CANCELED') {
-        return { error: null }; // User cancelled, not an error
+        return { error: null };
       }
-      console.error('Apple Sign In Error:', err);
+      console.warn('Apple Sign In Error:', err);
       return { error: err.message || 'Erro ao entrar com Apple.' };
     }
   };
 
   // ==================== Google Sign In ====================
   const signInWithGoogle = async () => {
+    if (isExpoGo) {
+      Alert.alert(
+        'Use o app instalado',
+        'O login com Google só funciona no app instalado (build) — não dentro do Expo Go. Use a build do GitHub no seu iPhone.'
+      );
+      return { error: 'Login com Google indisponível dentro do Expo Go.' };
+    }
+
     try {
       setLoading(true);
 
       const redirectUrl = Linking.createURL('auth/callback');
-      console.log('--- SUPABASE OAUTH REDIRECT URL ---');
-      console.log(redirectUrl);
-      console.log('------------------------------------');
 
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -225,17 +243,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (data.url) {
-        // Open the OAuth URL in the browser
-        const result = await WebBrowser.openAuthSessionAsync(
-          data.url,
-          redirectUrl
-        );
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
+          showInRecents: true,
+        });
 
         if (result.type === 'success' && result.url) {
-          // Parse access_token and refresh_token from the redirected URL hash or query params
-          const urlObj = new URL(result.url.replace('#', '?'));
-          const access_token = urlObj.searchParams.get('access_token');
-          const refresh_token = urlObj.searchParams.get('refresh_token');
+          // Tokens come back in URL hash (#access_token=...) or query
+          const fragment = result.url.includes('#')
+            ? result.url.split('#')[1]
+            : result.url.split('?')[1] ?? '';
+          const params = new URLSearchParams(fragment);
+          const access_token = params.get('access_token');
+          const refresh_token = params.get('refresh_token');
 
           if (access_token) {
             const { error: sessionError } = await supabase.auth.setSession({
@@ -250,10 +269,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       setLoading(false);
-      return { error: null }; // User closed browser or no session found
+      return { error: null };
     } catch (err: any) {
       setLoading(false);
-      console.error('Google Sign In Error:', err);
+      console.warn('Google Sign In Error:', err);
       return { error: err.message || 'Erro ao entrar com Google.' };
     }
   };
@@ -273,14 +292,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) return { error: 'No authenticated user', success: false };
 
     try {
-      // Request media library permissions
       const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permissionResult.granted) {
-        alert('É necessária permissão para acessar a galeria!');
+        Alert.alert('Permissão necessária', 'Permita acesso à galeria para alterar a foto.');
         return { error: 'Permission denied', success: false };
       }
 
-      // Pick the image
       const pickerResult = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
@@ -294,15 +311,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const imageUri = pickerResult.assets[0].uri;
       const fileExt = imageUri.split('.').pop();
-      const fileName = `${user.id}-${Math.random()}.${fileExt}`;
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       const filePath = `avatars/${fileName}`;
 
-      // Convert image to blob
       const response = await fetch(imageUri);
       const blob = await response.blob();
 
-      // Upload to Supabase Storage bucket 'avatars'
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('avatars')
         .upload(filePath, blob, {
           contentType: `image/${fileExt}`,
@@ -310,16 +325,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
 
       if (uploadError) {
-        console.error('Storage upload error:', uploadError);
         throw uploadError;
       }
 
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath);
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
-      // Update profile avatar_url
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
@@ -333,8 +345,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await refreshProfile();
       return { error: null, success: true };
     } catch (err: any) {
-      console.error('Error updating avatar:', err);
-      
+      console.warn('Error updating avatar:', err);
+
       // Fallback: use dicebear avatar
       try {
         const mockUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.email}`;
@@ -345,13 +357,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             updated_at: new Date().toISOString(),
           })
           .eq('id', user.id);
-          
+
         if (!updateError) {
           await refreshProfile();
           return { error: null, success: true };
         }
-      } catch (innerErr) {}
-      
+      } catch (_innerErr) {}
+
       return { error: err.message || err, success: false };
     }
   };
