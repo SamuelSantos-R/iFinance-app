@@ -52,6 +52,7 @@ jobs:
 
       - name: Build Unsigned App
         run: |
+          set -o pipefail
           xcodebuild build \
             -workspace "${{ steps.detect.outputs.workspace }}" \
             -scheme "${{ steps.detect.outputs.scheme }}" \
@@ -62,7 +63,15 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
-            -quiet
+            ENABLE_USER_SCRIPT_SANDBOXING=NO \
+            2>&1 | tee build.log | grep -E "(error:|warning:|note:|\*\* BUILD|Undefined symbol|ld:|fatal error|❌)" || true
+          # Re-check exit status
+          if grep -q "\*\* BUILD FAILED \*\*" build.log; then
+            echo "::group::Last 200 lines of build log"
+            tail -n 200 build.log
+            echo "::endgroup::"
+            exit 1
+          fi
 
       - name: Package IPA
         run: |
