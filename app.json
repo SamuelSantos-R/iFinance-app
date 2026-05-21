@@ -9,7 +9,6 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "bundleIdentifier": "com.heatz.ifinance",
-      "icon": "./assets/expo.icon",
       "infoPlist": {
         "NSFaceIDUsageDescription": "Use o Face ID para acessar sua conta de forma rápida e segura."
       }
