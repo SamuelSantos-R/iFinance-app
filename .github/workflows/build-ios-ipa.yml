@@ -30,23 +30,22 @@ jobs:
       - name: Detect Workspace and Scheme
         id: detect
         run: |
-          WORKSPACE=$(find ios -name "*.xcworkspace" -not -path "*/Pods/*" -maxdepth 3 | head -n 1)
+          WORKSPACE=$(find ios -maxdepth 2 -name "*.xcworkspace" -not -path "*/Pods/*" | head -n 1)
           if [ -z "$WORKSPACE" ]; then
-            echo "Error: no .xcworkspace found"
-            find ios -maxdepth 3 -name "*.xcworkspace"
-            exit 1
+            echo "Error: no .xcworkspace found"; exit 1
           fi
-          # Pick the first user scheme from the workspace
-          SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" 2>/dev/null \
-            | awk '/Schemes:/ {flag=1; next} flag && NF {print; exit}' \
-            | xargs)
-          if [ -z "$SCHEME" ]; then
-            echo "Error: no scheme found in $WORKSPACE"
-            xcodebuild -list -workspace "$WORKSPACE"
-            exit 1
+          # Main scheme = name of the .xcodeproj at the root of ios/
+          PROJECT=$(find ios -maxdepth 2 -name "*.xcodeproj" -not -path "*/Pods/*" | head -n 1)
+          if [ -z "$PROJECT" ]; then
+            echo "Error: no main .xcodeproj found at ios/"; exit 1
           fi
+          SCHEME=$(basename "$PROJECT" .xcodeproj)
           echo "Workspace: $WORKSPACE"
-          echo "Scheme: $SCHEME"
+          echo "Project:   $PROJECT"
+          echo "Scheme:    $SCHEME"
+          # Sanity check: confirm scheme exists in workspace
+          xcodebuild -list -workspace "$WORKSPACE" 2>/dev/null | grep -q "    $SCHEME$" \
+            || { echo "Scheme '$SCHEME' not found in workspace. Available:"; xcodebuild -list -workspace "$WORKSPACE"; exit 1; }
           echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
           echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
 
