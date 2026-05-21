@@ -48,7 +48,13 @@ jobs:
       - name: Package IPA
         run: |
           mkdir -p Payload
-          cp -r build_dir/Build/Products/Release-iphoneos/*.app Payload/
+          APP_PATH=$(find build_dir/Build/Products -name "*.app" -type d | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "Error: No .app file found!"
+            exit 1
+          fi
+          echo "Found app at: $APP_PATH"
+          cp -r "$APP_PATH" Payload/
           zip -r first-app.ipa Payload
 
       - name: Upload IPA Artifact
