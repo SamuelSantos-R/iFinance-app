@@ -1,7 +1,7 @@
 name: Build Unsigned IPA
 
 on:
-  workflow_dispatch: # Allows manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   build:
@@ -27,16 +27,34 @@ jobs:
           cd ios
           pod install
 
-      - name: Find Workspace and Scheme, then Build Unsigned App
+      - name: Detect Workspace and Scheme
+        id: detect
         run: |
-          WORKSPACE=$(find ios -name "*.xcworkspace" | grep -v "xcodeproj" | head -n 1)
-          SCHEME="firstapp"
+          WORKSPACE=$(find ios -name "*.xcworkspace" -not -path "*/Pods/*" -maxdepth 3 | head -n 1)
+          if [ -z "$WORKSPACE" ]; then
+            echo "Error: no .xcworkspace found"
+            find ios -maxdepth 3 -name "*.xcworkspace"
+            exit 1
+          fi
+          # Pick the first user scheme from the workspace
+          SCHEME=$(xcodebuild -list -workspace "$WORKSPACE" 2>/dev/null \
+            | awk '/Schemes:/ {flag=1; next} flag && NF {print; exit}' \
+            | xargs)
+          if [ -z "$SCHEME" ]; then
+            echo "Error: no scheme found in $WORKSPACE"
+            xcodebuild -list -workspace "$WORKSPACE"
+            exit 1
+          fi
           echo "Workspace: $WORKSPACE"
           echo "Scheme: $SCHEME"
-          
+          echo "workspace=$WORKSPACE" >> $GITHUB_OUTPUT
+          echo "scheme=$SCHEME" >> $GITHUB_OUTPUT
+
+      - name: Build Unsigned App
+        run: |
           xcodebuild build \
-            -workspace "$WORKSPACE" \
-            -scheme "$SCHEME" \
+            -workspace "${{ steps.detect.outputs.workspace }}" \
+            -scheme "${{ steps.detect.outputs.scheme }}" \
             -configuration Release \
             -sdk iphoneos \
             -derivedDataPath build_dir \
@@ -57,10 +75,10 @@ jobs:
           fi
           echo "Found app at: $APP_PATH"
           cp -r "$APP_PATH" Payload/
-          zip -r first-app.ipa Payload
+          zip -r iFinance.ipa Payload
 
       - name: Upload IPA Artifact
         uses: actions/upload-artifact@v4
         with:
           name: unsigned-ipa
-          path: first-app.ipa
+          path: iFinance.ipa
