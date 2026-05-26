@@ -34,12 +34,16 @@ const BANKS_LIST = [
   { id: 'santander', name: 'Santander', color: '#EC0000' },
 ];
 
+function isPermissionGranted(result: Notifications.NotificationPermissionsStatus) {
+  const permission = result as unknown as { granted?: boolean; status?: string };
+  return permission.granted ?? permission.status === 'granted';
+}
+
 export default function ShortcutsScreen() {
   const { profile } = useAuth();
   const [selectedBanks, setSelectedBanks] = useState<string[]>(['nubank', 'inter']);
   const [copiedField, setCopiedField] = useState<string | null>(null);
-  const [notificationPermission, setNotificationPermission] =
-    useState<Notifications.PermissionStatus>('undetermined' as any);
+  const [notificationsGranted, setNotificationsGranted] = useState(false);
 
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
   const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -60,7 +64,9 @@ export default function ShortcutsScreen() {
   );
 
   useEffect(() => {
-    Notifications.getPermissionsAsync().then((res) => setNotificationPermission(res.status));
+    Notifications.getPermissionsAsync().then((res) =>
+      setNotificationsGranted(isPermissionGranted(res))
+    );
   }, []);
 
   const requestNotifications = async () => {
@@ -72,9 +78,10 @@ export default function ShortcutsScreen() {
         allowSound: true,
       },
     });
-    setNotificationPermission(res.status);
+    const granted = isPermissionGranted(res);
+    setNotificationsGranted(granted);
 
-    if (res.status === 'granted') {
+    if (granted) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -196,7 +203,7 @@ export default function ShortcutsScreen() {
         <TouchableOpacity
           onPress={requestNotifications}
           activeOpacity={0.7}
-          disabled={notificationPermission === 'granted'}
+          disabled={notificationsGranted}
           className="bg-zinc-900 rounded-2xl px-4 py-4 mb-5 border border-zinc-800/60 flex-row items-center"
         >
           <View
@@ -206,12 +213,12 @@ export default function ShortcutsScreen() {
               height: 36,
               borderRadius: 12,
               backgroundColor:
-                notificationPermission === 'granted'
+                notificationsGranted
                   ? 'rgba(52,199,89,0.15)'
                   : 'rgba(0,122,255,0.15)',
             }}
           >
-            {notificationPermission === 'granted' ? (
+            {notificationsGranted ? (
               <Bell size={18} color="#34C759" />
             ) : (
               <BellOff size={18} color="#007AFF" />
@@ -219,17 +226,17 @@ export default function ShortcutsScreen() {
           </View>
           <View className="flex-1">
             <Text className="text-white text-[14px] font-semibold">
-              {notificationPermission === 'granted'
+              {notificationsGranted
                 ? 'Notificações ativadas'
                 : 'Ativar notificações'}
             </Text>
             <Text className="text-zinc-500 text-[12px] mt-0.5">
-              {notificationPermission === 'granted'
+              {notificationsGranted
                 ? 'Você receberá confirmação de cada gasto registrado.'
                 : 'Tocando aqui o iOS pedirá permissão.'}
             </Text>
           </View>
-          {notificationPermission !== 'granted' && (
+          {!notificationsGranted && (
             <ChevronRight size={16} color="#48484A" />
           )}
         </TouchableOpacity>

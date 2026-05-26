@@ -102,8 +102,8 @@ export default function ProfileScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } else if (error && error !== 'Cancelled' && error !== 'Permission denied') {
       Alert.alert(
-        'Aviso',
-        'Foto atualizada localmente. O bucket "avatars" precisa ser criado no Supabase.'
+        'Não foi possível salvar a foto',
+        String(error)
       );
     }
   };

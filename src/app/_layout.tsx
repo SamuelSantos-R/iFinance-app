@@ -1,13 +1,12 @@
 import '@/global.css';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ActivityIndicator, View, AppState, AppStateStatus } from 'react-native';
-import { Tabs } from 'expo-router';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { AuthProvider, useAuth } from '@/context/auth-context';
 import { AuthScreen } from '@/components/auth-screen';
 import { PinLockScreen } from '@/components/pin-lock-screen';
 import * as SecureStore from 'expo-secure-store';
 import * as Notifications from 'expo-notifications';
-import { Home, Receipt, Smartphone, User } from 'lucide-react-native';
 
 // Background fetch handler for notifications (idle config)
 Notifications.setNotificationHandler({
@@ -26,7 +25,7 @@ function AppContent() {
   // tracks last "real" state (foreground vs background), ignoring transient `inactive` from FaceID prompts
   const lastRealStateRef = useRef<AppStateStatus>('active');
 
-  const refreshLockStatus = async (force = false) => {
+  const refreshLockStatus = useCallback(async (force = false) => {
     if (!session) {
       setIsAppLocked(false);
       return;
@@ -42,7 +41,7 @@ function AppContent() {
       console.warn('Failed to load PIN status:', e);
       return false;
     }
-  };
+  }, [session]);
 
   useEffect(() => {
     async function init() {
@@ -54,7 +53,7 @@ function AppContent() {
       setCheckingPin(false);
     }
     init();
-  }, [session]);
+  }, [refreshLockStatus, session]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', async (nextAppState) => {
@@ -92,53 +91,41 @@ function AppContent() {
   }
 
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: '#8E8E93',
-        tabBarStyle: {
-          backgroundColor: '#000000',
-          borderTopColor: '#1C1C1E',
-          paddingBottom: 4,
-          paddingTop: 4,
-        },
-        tabBarLabelStyle: {
-          fontFamily: 'SF Pro Rounded',
-          fontSize: 10,
-          fontWeight: '600',
-        },
+    <NativeTabs
+      tintColor="#0A84FF"
+      iconColor={{ default: '#8E8E93', selected: '#0A84FF' }}
+      labelStyle={{
+        fontFamily: 'SF Pro Rounded',
+        fontSize: 11,
+        fontWeight: '600',
       }}
+      backgroundColor="rgba(0,0,0,0.62)"
+      blurEffect="systemChromeMaterialDark"
+      minimizeBehavior="onScrollDown"
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: 'Dashboard',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="transactions"
-        options={{
-          title: 'Transações',
-          tabBarIcon: ({ color, size }) => <Receipt size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="shortcuts"
-        options={{
-          title: 'Shortcuts',
-          tabBarIcon: ({ color, size }) => <Smartphone size={size} color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: 'Perfil',
-          tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
-        }}
-      />
-    </Tabs>
+      <NativeTabs.Trigger name="index">
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
+        <NativeTabs.Trigger.Label>Dashboard</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="transactions">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' }}
+          md="receipt_long"
+        />
+        <NativeTabs.Trigger.Label>Transações</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="shortcuts">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'iphone.gen3.radiowaves.left.and.right', selected: 'iphone.gen3.radiowaves.left.and.right' }}
+          md="smartphone"
+        />
+        <NativeTabs.Trigger.Label>Shortcuts</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="profile">
+        <NativeTabs.Trigger.Icon sf={{ default: 'person', selected: 'person.fill' }} md="account_circle" />
+        <NativeTabs.Trigger.Label>Perfil</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }
 

@@ -2,10 +2,13 @@ name: Build Unsigned IPA
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -13,14 +16,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.19'
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Show Xcode version
+        run: xcodebuild -version
 
       - name: Prebuild iOS Project
-        run: npx expo prebuild --platform ios
+        run: npx expo prebuild --platform ios --clean
 
       - name: Install CocoaPods
         run: |
@@ -63,13 +69,14 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             ENABLE_USER_SCRIPT_SANDBOXING=NO \
-            2>&1 | tee build.log | grep -E "(error:|warning:|note:|\*\* BUILD|Undefined symbol|ld:|fatal error|❌)" || true
-          # Re-check exit status
-          if grep -q "\*\* BUILD FAILED \*\*" build.log; then
+            2>&1 | tee build.log
+          BUILD_STATUS=${PIPESTATUS[0]}
+          grep -E "(error:|warning:|note:|\*\* BUILD|Undefined symbol|ld:|fatal error|❌)" build.log || true
+          if [ "$BUILD_STATUS" -ne 0 ] || grep -q "\*\* BUILD FAILED \*\*" build.log; then
             echo "::group::Last 200 lines of build log"
             tail -n 200 build.log
             echo "::endgroup::"
-            exit 1
+            exit "$BUILD_STATUS"
           fi
 
       - name: Package IPA

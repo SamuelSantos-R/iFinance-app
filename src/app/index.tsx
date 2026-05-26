@@ -14,12 +14,12 @@ import {
   TrendingUp,
   TrendingDown,
   Plus,
-  Smartphone,
   Bell,
   ArrowUpRight,
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { CategoryPieChart, type CategorySlice } from '@/components/category-pie-chart';
+import { GlassSurface } from '@/components/glass-surface';
 
 interface Transaction {
   id: string;
@@ -50,7 +50,7 @@ export default function DashboardScreen() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [allTransactions, setAllTransactions] = useState<Transaction[]>([]);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     if (!user) return;
     try {
       const { data: recent } = await supabase
@@ -71,16 +71,16 @@ export default function DashboardScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchTransactions();
-  }, [user]);
+  }, [fetchTransactions]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     fetchTransactions();
-  }, [user]);
+  }, [fetchTransactions]);
 
   const stats = useMemo(() => {
     let income = 0;
@@ -124,6 +124,7 @@ export default function DashboardScreen() {
 
   return (
     <View className="flex-1 bg-black">
+      <DashboardGlow />
       <ScrollView
         contentContainerStyle={{ paddingBottom: 100 }}
         refreshControl={
@@ -171,12 +172,11 @@ export default function DashboardScreen() {
 
         {/* Balance Card */}
         <View className="px-5 mt-3">
-          <View
+          <GlassSurface
             className="rounded-3xl p-6"
             style={{
-              backgroundColor: '#1C1C1E',
-              borderWidth: 1,
-              borderColor: '#2C2C2E',
+              borderRadius: 28,
+              boxShadow: '0 18px 42px rgba(0,122,255,0.14)',
             }}
           >
             <Text className="text-zinc-500 text-[12px] font-medium">Saldo total</Text>
@@ -233,23 +233,39 @@ export default function DashboardScreen() {
                 </Text>
               </View>
             </View>
-          </View>
+          </GlassSurface>
         </View>
 
         {/* Pie chart */}
         {pieData.length > 0 && (
           <View className="px-5 mt-4">
-            <View
+            <GlassSurface
               className="rounded-3xl p-5"
               style={{
-                backgroundColor: '#1C1C1E',
-                borderWidth: 1,
-                borderColor: '#2C2C2E',
+                borderRadius: 28,
+                boxShadow: '0 18px 42px rgba(175,82,222,0.14)',
               }}
             >
-              <Text className="text-white text-[16px] font-semibold mb-4">
-                Gastos por categoria
-              </Text>
+              <View className="flex-row items-center justify-between mb-4">
+                <View>
+                  <Text className="text-white text-[16px] font-semibold">
+                    Gastos por categoria
+                  </Text>
+                  <Text className="text-zinc-400 text-[11px] mt-0.5">
+                    Cores reais das suas categorias
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 15,
+                    backgroundColor: 'rgba(255,255,255,0.08)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255,255,255,0.10)',
+                  }}
+                />
+              </View>
               <View className="flex-row items-center">
                 <CategoryPieChart
                   data={pieData}
@@ -288,7 +304,7 @@ export default function DashboardScreen() {
                   })}
                 </View>
               </View>
-            </View>
+            </GlassSurface>
           </View>
         )}
 
@@ -442,4 +458,33 @@ function greetingByHour() {
   if (h < 12) return 'Bom dia';
   if (h < 18) return 'Boa tarde';
   return 'Boa noite';
+}
+
+function DashboardGlow() {
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: 72,
+          right: -70,
+          width: 210,
+          height: 210,
+          borderRadius: 105,
+          backgroundColor: 'rgba(0,122,255,0.22)',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: 270,
+          left: -100,
+          width: 250,
+          height: 250,
+          borderRadius: 125,
+          backgroundColor: 'rgba(52,199,89,0.14)',
+        }}
+      />
+    </View>
+  );
 }

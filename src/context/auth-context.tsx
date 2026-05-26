@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Alert, Platform } from 'react-native';
+import { Alert } from 'react-native';
 import Constants, { ExecutionEnvironment } from 'expo-constants';
 import { supabase } from '@/lib/supabase';
 import { Session, User } from '@supabase/supabase-js';
@@ -8,6 +8,7 @@ import * as AppleAuthentication from 'expo-apple-authentication';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import { decode } from 'base64-arraybuffer';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -54,11 +55,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (error) {
         console.warn('Error fetching profile:', error.message);
+        return null;
       } else {
         setProfile(data);
+        return data as Profile;
       }
     } catch (err) {
       console.warn('Error in fetchProfile:', err);
+      return null;
     }
   };
 
@@ -302,25 +306,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.5,
+        base64: true,
+        quality: 0.75,
       });
 
       if (pickerResult.canceled || !pickerResult.assets || pickerResult.assets.length === 0) {
         return { error: 'Cancelled', success: false };
       }
 
-      const imageUri = pickerResult.assets[0].uri;
-      const fileExt = imageUri.split('.').pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      const asset = pickerResult.assets[0];
+      if (!asset.base64) {
+        throw new Error('Não foi possível ler a imagem selecionada.');
+      }
 
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
+      const contentType = asset.mimeType ?? 'image/jpeg';
+      const fileExt =
+        asset.fileName?.split('.').pop()?.toLowerCase() ??
+        contentType.split('/').pop()?.replace('jpeg', 'jpg') ??
+        'jpg';
+      const version = Date.now();
+      const filePath = `${user.id}/profile-${version}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from('avatars')
-        .upload(filePath, blob, {
-          contentType: `image/${fileExt}`,
+        .upload(filePath, decode(asset.base64), {
+          cacheControl: '3600',
+          contentType,
           upsert: true,
         });
 
@@ -332,38 +343,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         data: { publicUrl },
       } = supabase.storage.from('avatars').getPublicUrl(filePath);
 
-      const { error: updateError } = await supabase
+      const avatarUrl = `${publicUrl}?v=${version}`;
+
+      const { data: updatedProfile, error: updateError } = await supabase
         .from('profiles')
         .update({
-          avatar_url: publicUrl,
+          avatar_url: avatarUrl,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', user.id);
+        .eq('id', user.id)
+        .select('*')
+        .single();
 
       if (updateError) throw updateError;
 
-      await refreshProfile();
+      setProfile(updatedProfile as Profile);
       return { error: null, success: true };
     } catch (err: any) {
       console.warn('Error updating avatar:', err);
-
-      // Fallback: use dicebear avatar
-      try {
-        const mockUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${user.email}`;
-        const { error: updateError } = await supabase
-          .from('profiles')
-          .update({
-            avatar_url: mockUrl,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', user.id);
-
-        if (!updateError) {
-          await refreshProfile();
-          return { error: null, success: true };
-        }
-      } catch (_innerErr) {}
-
       return { error: err.message || err, success: false };
     }
   };

@@ -23,7 +23,49 @@ create policy "Users can insert their own profile." on public.profiles
 create policy "Users can update their own profile." on public.profiles
   for update using (auth.uid() = id);
 
--- 2. Create transactions table
+-- 2. Create avatar storage bucket and policies
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'avatars',
+  'avatars',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp', 'image/heic']
+)
+on conflict (id) do update set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "Avatar images are publicly readable." on storage.objects;
+create policy "Avatar images are publicly readable." on storage.objects
+  for select using (bucket_id = 'avatars');
+
+drop policy if exists "Users can upload their own avatar." on storage.objects;
+create policy "Users can upload their own avatar." on storage.objects
+  for insert with check (
+    bucket_id = 'avatars'
+    and auth.uid()::text = split_part(name, '/', 1)
+  );
+
+drop policy if exists "Users can update their own avatar." on storage.objects;
+create policy "Users can update their own avatar." on storage.objects
+  for update using (
+    bucket_id = 'avatars'
+    and auth.uid()::text = split_part(name, '/', 1)
+  ) with check (
+    bucket_id = 'avatars'
+    and auth.uid()::text = split_part(name, '/', 1)
+  );
+
+drop policy if exists "Users can delete their own avatar." on storage.objects;
+create policy "Users can delete their own avatar." on storage.objects
+  for delete using (
+    bucket_id = 'avatars'
+    and auth.uid()::text = split_part(name, '/', 1)
+  );
+
+-- 3. Create transactions table
 create table if not exists public.transactions (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
@@ -51,7 +93,7 @@ create policy "Users can update their own transactions." on public.transactions
 create policy "Users can delete their own transactions." on public.transactions
   for delete using (auth.uid() = user_id);
 
--- 3. Create RPC function for shortcut inserts
+-- 4. Create RPC function for shortcut inserts
 create or replace function public.add_transaction_via_shortcut(
   api_key_param text,
   amount_param numeric,
@@ -86,7 +128,7 @@ begin
 end;
 $$;
 
--- 4. Create trigger to automatically create a profile when a new user signs up
+-- 5. Create trigger to automatically create a profile when a new user signs up
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -106,6 +148,5 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
-
 
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -61,7 +61,7 @@ export default function TransactionsScreen() {
   const [type, setType] = useState<'income' | 'expense'>('expense');
   const [submitting, setSubmitting] = useState(false);
 
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     if (!user) return;
     try {
       setLoading(true);
@@ -82,11 +82,11 @@ export default function TransactionsScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterType, user]);
 
   useEffect(() => {
     fetchTransactions();
-  }, [user, filterType]);
+  }, [fetchTransactions]);
 
   const openModal = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);

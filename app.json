@@ -16,7 +16,9 @@
         "NSPhotoLibraryUsageDescription": "Precisamos acessar suas fotos para você escolher a foto de perfil.",
         "NSCameraUsageDescription": "Precisamos da câmera para você tirar uma foto de perfil.",
         "ITSAppUsesNonExemptEncryption": false,
-        "LSApplicationQueriesSchemes": ["shortcuts"]
+        "LSApplicationQueriesSchemes": [
+          "shortcuts"
+        ]
       }
     },
     "android": {
@@ -53,7 +55,8 @@
         {
           "faceIDPermission": "Use o Face ID para acessar sua conta de forma rápida e segura."
         }
-      ]
+      ],
+      "expo-image"
     ],
     "experiments": {
       "typedRoutes": true,

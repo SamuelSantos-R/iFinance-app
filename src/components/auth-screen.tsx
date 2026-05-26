@@ -23,6 +23,7 @@ import {
 } from 'lucide-react-native';
 import { Image } from 'expo-image';
 import * as AppleAuthentication from 'expo-apple-authentication';
+import { GlassSurface } from '@/components/glass-surface';
 
 type Step = 'landing' | 'form';
 
@@ -113,6 +114,7 @@ export function AuthScreen() {
   if (step === 'landing') {
     return (
       <View className="flex-1 bg-black">
+        <LoginBackdrop />
         <ScrollView
           contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}
           className="px-8"
@@ -218,15 +220,18 @@ export function AuthScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       className="flex-1 bg-black"
     >
+      <LoginBackdrop />
       <View className="px-5 pt-14">
-        <TouchableOpacity
-          onPress={goBack}
-          activeOpacity={0.6}
-          className="bg-zinc-900 border border-zinc-800 items-center justify-center"
-          style={{ width: 40, height: 40, borderRadius: 20 }}
-        >
-          <ChevronLeft size={22} color="white" />
-        </TouchableOpacity>
+        <GlassSurface interactive style={{ width: 42, height: 42, borderRadius: 21 }}>
+          <TouchableOpacity
+            onPress={goBack}
+            activeOpacity={0.6}
+            className="items-center justify-center"
+            style={{ flex: 1 }}
+          >
+            <ChevronLeft size={22} color="white" />
+          </TouchableOpacity>
+        </GlassSurface>
       </View>
 
       <ScrollView
@@ -235,11 +240,12 @@ export function AuthScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View className="items-center mb-10">
+        <GlassSurface style={{ borderRadius: 34, padding: 20 }}>
+        <View className="items-center mb-8">
           <Text className="text-[28px] font-bold text-white text-center tracking-tight">
             {isSignUp ? 'Crie sua conta' : 'Bem-vindo de volta'}
           </Text>
-          <Text className="text-zinc-400 text-[15px] mt-2 text-center">
+          <Text className="text-zinc-300 text-[15px] mt-2 text-center">
             {isSignUp ? 'Leva menos de um minuto.' : 'Entre com suas credenciais.'}
           </Text>
         </View>
@@ -254,14 +260,14 @@ export function AuthScreen() {
         {isSignUp && (
           <View className="gap-3 mb-3">
             <InputRow
-              icon={<User size={18} color="#8E8E93" strokeWidth={2} />}
+              icon={<User size={18} color="#D1D1D6" strokeWidth={2} />}
               placeholder="Nome completo"
               value={fullName}
               onChangeText={setFullName}
               autoCapitalize="words"
             />
             <InputRow
-              icon={<User size={18} color="#8E8E93" strokeWidth={2} />}
+              icon={<User size={18} color="#D1D1D6" strokeWidth={2} />}
               placeholder="Nome de usuário"
               value={username}
               onChangeText={setUsername}
@@ -272,7 +278,7 @@ export function AuthScreen() {
 
         <View className="gap-3 mb-6">
           <InputRow
-            icon={<Mail size={18} color="#8E8E93" strokeWidth={2} />}
+            icon={<Mail size={18} color="#D1D1D6" strokeWidth={2} />}
             placeholder="Seu e-mail"
             value={email}
             onChangeText={setEmail}
@@ -280,7 +286,7 @@ export function AuthScreen() {
             autoCapitalize="none"
           />
           <InputRow
-            icon={<Lock size={18} color="#8E8E93" strokeWidth={2} />}
+            icon={<Lock size={18} color="#D1D1D6" strokeWidth={2} />}
             placeholder="Sua senha"
             value={password}
             onChangeText={setPassword}
@@ -293,9 +299,9 @@ export function AuthScreen() {
                 activeOpacity={0.6}
               >
                 {showPassword ? (
-                  <EyeOff size={18} color="#8E8E93" />
+                  <EyeOff size={18} color="#D1D1D6" />
                 ) : (
-                  <Eye size={18} color="#8E8E93" />
+                  <Eye size={18} color="#D1D1D6" />
                 )}
               </TouchableOpacity>
             }
@@ -309,11 +315,8 @@ export function AuthScreen() {
           className="w-full bg-blue-600 items-center justify-center mb-4"
           style={{
             height: INPUT_HEIGHT,
-            borderRadius: 16,
-            shadowColor: '#007AFF',
-            shadowOpacity: 0.3,
-            shadowRadius: 12,
-            shadowOffset: { width: 0, height: 4 },
+            borderRadius: 18,
+            boxShadow: '0 18px 34px rgba(0,122,255,0.24)',
           }}
         >
           {loading ? (
@@ -333,13 +336,14 @@ export function AuthScreen() {
           activeOpacity={0.6}
           className="items-center py-2"
         >
-          <Text className="text-zinc-400 text-[14px]">
+          <Text className="text-zinc-300 text-[14px]">
             {isSignUp ? 'Já tem uma conta? ' : 'Novo por aqui? '}
-            <Text className="text-blue-500 font-semibold">
+            <Text className="text-blue-400 font-semibold">
               {isSignUp ? 'Entrar' : 'Criar conta'}
             </Text>
           </Text>
         </TouchableOpacity>
+        </GlassSurface>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -353,11 +357,12 @@ interface InputRowProps extends React.ComponentProps<typeof TextInput> {
 
 function InputRow({ icon, trailing, style, ...textInputProps }: InputRowProps) {
   return (
-    <View
-      className="flex-row items-center bg-zinc-900 border border-zinc-800"
+    <GlassSurface
+      interactive
+      className="flex-row items-center"
       style={{
         height: INPUT_HEIGHT,
-        borderRadius: 16,
+        borderRadius: 18,
         paddingHorizontal: 16,
         gap: 12,
       }}
@@ -379,6 +384,35 @@ function InputRow({ icon, trailing, style, ...textInputProps }: InputRowProps) {
         {...textInputProps}
       />
       {trailing}
+    </GlassSurface>
+  );
+}
+
+function LoginBackdrop() {
+  return (
+    <View pointerEvents="none" style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+      <View
+        style={{
+          position: 'absolute',
+          top: 86,
+          right: -82,
+          width: 230,
+          height: 230,
+          borderRadius: 115,
+          backgroundColor: 'rgba(0,122,255,0.26)',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          bottom: 150,
+          left: -90,
+          width: 260,
+          height: 260,
+          borderRadius: 130,
+          backgroundColor: 'rgba(175,82,222,0.20)',
+        }}
+      />
     </View>
   );
 }

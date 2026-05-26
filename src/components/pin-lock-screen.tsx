@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -34,20 +34,7 @@ export function PinLockScreen({
   const [greeting, setGreeting] = useState('Olá');
   const shakeAnim = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    const hour = new Date().getHours();
-    if (hour < 12) setGreeting('Bom dia');
-    else if (hour < 18) setGreeting('Boa tarde');
-    else setGreeting('Boa noite');
-
-    if (!isSettingPin) {
-      // Delay so iOS has time to settle into 'active'
-      const t = setTimeout(checkBiometricsAndAuthenticate, 300);
-      return () => clearTimeout(t);
-    }
-  }, []);
-
-  const checkBiometricsAndAuthenticate = async () => {
+  const checkBiometricsAndAuthenticate = useCallback(async () => {
     try {
       const isEnabled = await SecureStore.getItemAsync('biometrics_enabled');
       if (isEnabled !== 'true') return;
@@ -70,7 +57,20 @@ export function PinLockScreen({
     } catch (error) {
       console.warn('Biometric authentication failed:', error);
     }
-  };
+  }, [onUnlock]);
+
+  useEffect(() => {
+    const hour = new Date().getHours();
+    if (hour < 12) setGreeting('Bom dia');
+    else if (hour < 18) setGreeting('Boa tarde');
+    else setGreeting('Boa noite');
+
+    if (!isSettingPin) {
+      // Delay so iOS has time to settle into 'active'
+      const t = setTimeout(checkBiometricsAndAuthenticate, 300);
+      return () => clearTimeout(t);
+    }
+  }, [checkBiometricsAndAuthenticate, isSettingPin]);
 
   const triggerShake = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
