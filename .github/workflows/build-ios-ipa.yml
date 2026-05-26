@@ -71,13 +71,13 @@ jobs:
             > build.log 2>&1
           BUILD_STATUS=$?
 
-          echo "::group::Build summary"
-          grep -E "(error:|warning:|note:|\*\* BUILD|Undefined symbol|ld:|fatal error|❌)" build.log | tail -n 200 || true
+          echo "::group::Build errors only"
+          grep -Ei "(^|[:[:space:]])error:|\\*\\* BUILD|Undefined symbol|ld:|fatal error|❌" build.log | tail -n 120 || true
           echo "::endgroup::"
 
           if [ "$BUILD_STATUS" -ne 0 ] || grep -q "\*\* BUILD FAILED \*\*" build.log; then
-            echo "::group::Last 200 lines of build log"
-            tail -n 200 build.log
+            echo "::group::Last 80 lines of build log"
+            tail -n 80 build.log
             echo "::endgroup::"
             exit 1
           fi
