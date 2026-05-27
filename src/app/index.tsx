@@ -1,25 +1,20 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
   Image,
+  RefreshControl,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
-import { useAuth } from '@/context/auth-context';
-import { supabase } from '@/lib/supabase';
-import {
-  TrendingUp,
-  TrendingDown,
-  Plus,
-  Bell,
-  ArrowUpRight,
-} from 'lucide-react-native';
+import { Plus } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { CategoryPieChart, type CategorySlice } from '@/components/category-pie-chart';
 import { GlassSurface } from '@/components/glass-surface';
+import { useAuth } from '@/context/auth-context';
+import { supabase } from '@/lib/supabase';
 
 interface Transaction {
   id: string;
@@ -32,19 +27,20 @@ interface Transaction {
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
-  'Alimentação': '#FF9500',
-  'Transporte': '#007AFF',
-  'Moradia': '#FF3B30',
-  'Lazer': '#AF52DE',
-  'Saúde': '#34C759',
-  'Salário': '#5AC8FA',
-  'Educação': '#FFCC00',
-  'Outros': '#8E8E93',
+  Alimentação: '#FF9F0A',
+  Transporte: '#0A84FF',
+  Moradia: '#FF453A',
+  Lazer: '#BF5AF2',
+  Saúde: '#30D158',
+  Salário: '#64D2FF',
+  Educação: '#FFD60A',
+  Outros: '#8E8E93',
 };
 
 export default function DashboardScreen() {
   const { user, profile } = useAuth();
   const router = useRouter();
+  const { width } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -82,407 +78,407 @@ export default function DashboardScreen() {
     fetchTransactions();
   }, [fetchTransactions]);
 
+  const monthlyTransactions = useMemo(() => {
+    const now = new Date();
+    return allTransactions.filter((transaction) => {
+      const date = new Date(transaction.date);
+      return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+    });
+  }, [allTransactions]);
+
   const stats = useMemo(() => {
     let income = 0;
     let expense = 0;
-    allTransactions.forEach((tx) => {
-      const amt = Math.abs(parseFloat(tx.amount as any));
-      if (tx.type === 'income') income += amt;
-      else expense += amt;
+    monthlyTransactions.forEach((tx) => {
+      const amount = Math.abs(Number(tx.amount));
+      if (tx.type === 'income') income += amount;
+      else expense += amount;
     });
     return { income, expense, balance: income - expense };
-  }, [allTransactions]);
+  }, [monthlyTransactions]);
 
   const pieData = useMemo<CategorySlice[]>(() => {
     const byCategory = new Map<string, number>();
-    allTransactions
-      .filter((t) => t.type === 'expense')
-      .forEach((t) => {
-        const amt = Math.abs(parseFloat(t.amount as any));
-        byCategory.set(t.category, (byCategory.get(t.category) || 0) + amt);
+    monthlyTransactions
+      .filter((transaction) => transaction.type === 'expense')
+      .forEach((transaction) => {
+        const amount = Math.abs(Number(transaction.amount));
+        byCategory.set(
+          transaction.category,
+          (byCategory.get(transaction.category) || 0) + amount
+        );
       });
+
     return Array.from(byCategory.entries())
       .sort((a, b) => b[1] - a[1])
       .map(([category, amount]) => ({
         category,
         amount,
-        color: CATEGORY_COLORS[category] || '#48484A',
+        color: CATEGORY_COLORS[category] || CATEGORY_COLORS.Outros,
       }));
-  }, [allTransactions]);
+  }, [monthlyTransactions]);
 
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-
-  const formatCurrencyShort = (value: number) => {
-    if (value >= 10000) return `R$ ${(value / 1000).toFixed(1)}k`;
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
+  const available = Math.max(stats.balance, 0);
+  const chartSize = Math.min(width - 48, 340);
 
   return (
-    <View className="flex-1 bg-black">
-      <DashboardGlow />
+    <View style={{ flex: 1, backgroundColor: '#03070D' }}>
+      <DashboardBackground />
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 100 }}
+        contentContainerStyle={{
+          paddingHorizontal: 22,
+          paddingTop: 56,
+          paddingBottom: 116,
+        }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#007AFF" />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0A84FF" />
         }
-        className="flex-1"
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Header */}
-        <View className="px-6 pt-14 pb-3 flex-row justify-between items-center">
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <View>
-            <Text className="text-zinc-500 text-[12px] font-medium">
-              {greetingByHour()},
-            </Text>
-            <Text className="text-white text-[22px] font-bold tracking-tight mt-0.5">
-              {profile?.full_name?.split(' ')[0] || 'Usuário'}
+            <GlassSurface
+              tintColor="rgba(10,132,255,0.10)"
+              style={{
+                paddingHorizontal: 18,
+                paddingVertical: 11,
+                borderRadius: 24,
+                backgroundColor: 'rgba(11,34,59,0.52)',
+                borderColor: 'rgba(62,140,222,0.32)',
+              }}
+            >
+              <Text style={{ color: '#F5F5F7', fontSize: 27, fontWeight: '400', letterSpacing: -0.5 }}>
+                {currentMonthLabel()}
+              </Text>
+            </GlassSurface>
+            <Text
+              style={{
+                marginLeft: 14,
+                marginTop: 14,
+                color: '#89909D',
+                fontSize: 15,
+                fontWeight: '400',
+              }}
+            >
+              {daysLeftInMonth()} dias restantes
             </Text>
           </View>
-          <TouchableOpacity
-            onPress={() => router.push('/profile')}
-            activeOpacity={0.7}
-            className="overflow-hidden items-center justify-center"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              backgroundColor: '#1C1C1E',
-              borderWidth: 1,
-              borderColor: '#2C2C2E',
-            }}
-          >
-            {profile?.avatar_url ? (
-              <Image
-                source={{ uri: profile.avatar_url }}
-                style={{ width: '100%', height: '100%' }}
-                resizeMode="cover"
-              />
-            ) : (
-              <Text className="text-white font-semibold text-[14px]">
-                {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
-              </Text>
-            )}
+
+          <TouchableOpacity onPress={() => router.push('/profile')} activeOpacity={0.7}>
+            <GlassSurface
+              interactive
+              tintColor="rgba(10,132,255,0.08)"
+              style={{
+                width: 54,
+                height: 54,
+                borderRadius: 27,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: 'rgba(11,34,59,0.46)',
+                borderColor: 'rgba(62,140,222,0.28)',
+              }}
+            >
+              {profile?.avatar_url ? (
+                <Image
+                  source={{ uri: profile.avatar_url }}
+                  resizeMode="cover"
+                  style={{ width: 46, height: 46, borderRadius: 23 }}
+                />
+              ) : (
+                <Text style={{ color: '#F5F5F7', fontSize: 18, fontWeight: '400' }}>
+                  {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
+                </Text>
+              )}
+            </GlassSurface>
           </TouchableOpacity>
         </View>
 
-        {/* Balance Card */}
-        <View className="px-5 mt-3">
-          <GlassSurface
-            className="rounded-3xl p-6"
-            style={{
-              borderRadius: 28,
-              boxShadow: '0 18px 42px rgba(0,122,255,0.14)',
-            }}
-          >
-            <Text className="text-zinc-500 text-[12px] font-medium">Saldo total</Text>
-            <Text className="text-white text-[34px] font-bold tracking-tight mt-1">
-              {formatCurrency(stats.balance)}
-            </Text>
-
-            <View className="flex-row mt-5 gap-3">
-              <View className="flex-1 bg-black/30 rounded-2xl p-3">
-                <View className="flex-row items-center" style={{ gap: 6 }}>
-                  <View
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 9,
-                      backgroundColor: 'rgba(52,199,89,0.15)',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <TrendingUp size={11} color="#34C759" strokeWidth={2.5} />
-                  </View>
-                  <Text className="text-zinc-400 text-[11px]">Entradas</Text>
-                </View>
-                <Text
-                  className="text-green-500 font-semibold text-[15px] mt-1"
-                  numberOfLines={1}
-                >
-                  {formatCurrencyShort(stats.income)}
-                </Text>
-              </View>
-
-              <View className="flex-1 bg-black/30 rounded-2xl p-3">
-                <View className="flex-row items-center" style={{ gap: 6 }}>
-                  <View
-                    style={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: 9,
-                      backgroundColor: 'rgba(255,59,48,0.15)',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <TrendingDown size={11} color="#FF3B30" strokeWidth={2.5} />
-                  </View>
-                  <Text className="text-zinc-400 text-[11px]">Saídas</Text>
-                </View>
-                <Text
-                  className="text-red-500 font-semibold text-[15px] mt-1"
-                  numberOfLines={1}
-                >
-                  {formatCurrencyShort(stats.expense)}
-                </Text>
-              </View>
-            </View>
-          </GlassSurface>
+        <View style={{ marginTop: 38, alignItems: 'center' }}>
+          <CategoryPieChart
+            data={pieData}
+            total={stats.expense}
+            centerValue={formatCurrencyWhole(available)}
+            centerLabel="disponível para gastar"
+            size={chartSize}
+            thickness={15}
+          />
         </View>
 
-        {/* Pie chart */}
-        {pieData.length > 0 && (
-          <View className="px-5 mt-4">
-            <GlassSurface
-              className="rounded-3xl p-5"
+        <View
+          style={{
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            marginTop: 30,
+            marginBottom: 31,
+          }}
+        >
+          <Metric label="Entradas" value={formatCurrencyWhole(stats.income)} color="#F5F5F7" />
+          <Metric label="Gastos" value={formatCurrencyWhole(stats.expense)} color="#F5F5F7" />
+          <Metric label="Disponível" value={formatCurrencyWhole(available)} color="#F5F5F7" />
+        </View>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={{ color: '#F5F5F7', fontSize: 20, fontWeight: '500', letterSpacing: -0.3 }}>
+            Categorias
+          </Text>
+          <TouchableOpacity onPress={() => router.push('/transactions')} activeOpacity={0.65}>
+            <Text style={{ color: '#4596FF', fontSize: 14, fontWeight: '400' }}>Ver todas</Text>
+          </TouchableOpacity>
+        </View>
+
+        <GlassSurface
+          tintColor="rgba(255,255,255,0.04)"
+          style={{
+            marginTop: 14,
+            paddingHorizontal: 18,
+            paddingVertical: 5,
+            borderRadius: 28,
+            backgroundColor: 'rgba(19,22,27,0.63)',
+            borderColor: 'rgba(255,255,255,0.08)',
+          }}
+        >
+          {pieData.length === 0 ? (
+            <Text
               style={{
-                borderRadius: 28,
-                boxShadow: '0 18px 42px rgba(175,82,222,0.14)',
+                paddingVertical: 20,
+                color: '#8E8E93',
+                fontSize: 14,
+                fontWeight: '400',
+                textAlign: 'center',
               }}
             >
-              <View className="flex-row items-center justify-between mb-4">
-                <View>
-                  <Text className="text-white text-[16px] font-semibold">
-                    Gastos por categoria
-                  </Text>
-                  <Text className="text-zinc-400 text-[11px] mt-0.5">
-                    Cores reais das suas categorias
-                  </Text>
-                </View>
+              Seus gastos aparecerão no gráfico por categoria.
+            </Text>
+          ) : (
+            pieData.slice(0, 4).map((slice, index) => (
+              <View
+                key={slice.category}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingVertical: 13,
+                  borderBottomWidth: index < Math.min(pieData.length, 4) - 1 ? 0.5 : 0,
+                  borderBottomColor: 'rgba(255,255,255,0.08)',
+                }}
+              >
                 <View
                   style={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: 15,
-                    backgroundColor: 'rgba(255,255,255,0.08)',
-                    borderWidth: 1,
-                    borderColor: 'rgba(255,255,255,0.10)',
+                    width: 9,
+                    height: 9,
+                    borderRadius: 5,
+                    marginRight: 12,
+                    backgroundColor: slice.color,
                   }}
                 />
+                <Text style={{ flex: 1, color: '#D5D7DD', fontSize: 14, fontWeight: '400' }}>
+                  {slice.category}
+                </Text>
+                <Text style={{ color: '#8E8E93', fontSize: 13, fontWeight: '400', marginRight: 13 }}>
+                  {Math.round((slice.amount / stats.expense) * 100)}%
+                </Text>
+                <Text style={{ color: '#F5F5F7', fontSize: 14, fontWeight: '400' }}>
+                  {formatCurrencyWhole(slice.amount)}
+                </Text>
               </View>
-              <View className="flex-row items-center">
-                <CategoryPieChart
-                  data={pieData}
-                  total={stats.expense}
-                  formatTotal={formatCurrencyShort}
-                  size={150}
-                  thickness={22}
-                />
-                <View className="flex-1 ml-5 gap-2.5">
-                  {pieData.slice(0, 5).map((slice) => {
-                    const percent = ((slice.amount / stats.expense) * 100).toFixed(0);
-                    return (
-                      <View key={slice.category} className="flex-row items-center justify-between">
-                        <View className="flex-row items-center flex-1">
-                          <View
-                            style={{
-                              width: 8,
-                              height: 8,
-                              borderRadius: 4,
-                              backgroundColor: slice.color,
-                              marginRight: 8,
-                            }}
-                          />
-                          <Text
-                            className="text-zinc-300 text-[12px] flex-1"
-                            numberOfLines={1}
-                          >
-                            {slice.category}
-                          </Text>
-                        </View>
-                        <Text className="text-zinc-500 text-[12px] font-medium">
-                          {percent}%
-                        </Text>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
+            ))
+          )}
+        </GlassSurface>
+
+        <View
+          style={{
+            marginTop: 30,
+            marginBottom: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <Text style={{ color: '#F5F5F7', fontSize: 20, fontWeight: '500', letterSpacing: -0.3 }}>
+            Atividade recente
+          </Text>
+          <TouchableOpacity onPress={() => router.push('/transactions')} activeOpacity={0.7}>
+            <GlassSurface
+              interactive
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 5,
+                borderRadius: 18,
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                backgroundColor: 'rgba(255,255,255,0.06)',
+              }}
+            >
+              <Plus size={15} strokeWidth={1.5} color="#F5F5F7" />
+              <Text style={{ color: '#F5F5F7', fontSize: 13, fontWeight: '400' }}>Adicionar</Text>
             </GlassSurface>
-          </View>
-        )}
-
-        {/* Shortcut promo */}
-        <View className="px-5 mt-4">
-          <TouchableOpacity
-            onPress={() => router.push('/shortcuts')}
-            activeOpacity={0.75}
-            className="rounded-3xl p-5 flex-row items-center"
-            style={{
-              backgroundColor: 'rgba(0,122,255,0.08)',
-              borderWidth: 1,
-              borderColor: 'rgba(0,122,255,0.2)',
-            }}
-          >
-            <View
-              className="items-center justify-center"
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 12,
-                backgroundColor: 'rgba(0,122,255,0.15)',
-              }}
-            >
-              <Bell size={18} color="#007AFF" />
-            </View>
-            <View className="flex-1 ml-3">
-              <Text className="text-white text-[14px] font-semibold">
-                Configure os Atalhos do iOS
-              </Text>
-              <Text className="text-zinc-400 text-[12px] mt-0.5">
-                Gastos registrados automaticamente pela notificação.
-              </Text>
-            </View>
-            <ArrowUpRight size={16} color="#007AFF" />
           </TouchableOpacity>
         </View>
 
-        {/* Add transaction CTA */}
-        <View className="px-5 mt-4">
-          <TouchableOpacity
-            onPress={() => router.push('/transactions')}
-            activeOpacity={0.75}
-            className="rounded-2xl py-4 flex-row items-center justify-center"
-            style={{
-              backgroundColor: '#1C1C1E',
-              borderWidth: 1,
-              borderColor: '#2C2C2E',
-              gap: 8,
-            }}
-          >
-            <Plus size={18} color="#007AFF" />
-            <Text className="text-white text-[14px] font-semibold">Novo lançamento</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Recent */}
-        <View className="px-5 mt-6 mb-3 flex-row justify-between items-center">
-          <Text className="text-white text-[16px] font-semibold">Atividades recentes</Text>
-          <TouchableOpacity onPress={() => router.push('/transactions')} activeOpacity={0.6}>
-            <Text className="text-blue-500 text-[13px] font-semibold">Ver todas</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View className="px-5">
+        <GlassSurface
+          tintColor="rgba(255,255,255,0.04)"
+          style={{
+            borderRadius: 28,
+            overflow: 'hidden',
+            backgroundColor: 'rgba(19,22,27,0.63)',
+            borderColor: 'rgba(255,255,255,0.08)',
+          }}
+        >
           {loading ? (
-            <ActivityIndicator size="small" color="#007AFF" style={{ marginVertical: 30 }} />
+            <ActivityIndicator size="small" color="#0A84FF" style={{ marginVertical: 32 }} />
           ) : transactions.length === 0 ? (
-            <View
-              className="rounded-3xl p-8 items-center"
-              style={{
-                backgroundColor: '#1C1C1E',
-                borderWidth: 1,
-                borderColor: '#2C2C2E',
-              }}
-            >
-              <Text className="text-zinc-300 text-[15px] font-semibold">
+            <View style={{ padding: 26, alignItems: 'center' }}>
+              <Text style={{ color: '#F5F5F7', fontSize: 15, fontWeight: '400' }}>
                 Nenhuma transação ainda
               </Text>
-              <Text className="text-zinc-500 text-[12px] mt-1 text-center">
-                Registre um lançamento manual ou configure{'\n'}os atalhos para começar.
+              <Text
+                style={{
+                  color: '#8E8E93',
+                  fontSize: 13,
+                  fontWeight: '400',
+                  marginTop: 7,
+                  textAlign: 'center',
+                }}
+              >
+                Adicione um lançamento para começar.
               </Text>
             </View>
           ) : (
-            <View
-              className="rounded-3xl overflow-hidden"
-              style={{
-                backgroundColor: '#1C1C1E',
-                borderWidth: 1,
-                borderColor: '#2C2C2E',
-              }}
-            >
-              {transactions.slice(0, 6).map((tx, i) => (
+            transactions.slice(0, 4).map((transaction, index) => (
+              <View
+                key={transaction.id}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  paddingHorizontal: 18,
+                  paddingVertical: 15,
+                  borderBottomWidth: index < Math.min(transactions.length, 4) - 1 ? 0.5 : 0,
+                  borderBottomColor: 'rgba(255,255,255,0.08)',
+                }}
+              >
                 <View
-                  key={tx.id}
-                  className="px-4 py-3 flex-row items-center"
                   style={{
-                    borderBottomWidth: i !== Math.min(5, transactions.length - 1) ? 0.5 : 0,
-                    borderBottomColor: '#2C2C2E',
+                    width: 38,
+                    height: 38,
+                    borderRadius: 19,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 13,
+                    backgroundColor: `${CATEGORY_COLORS[transaction.category] || CATEGORY_COLORS.Outros}22`,
                   }}
                 >
                   <View
-                    className="items-center justify-center mr-3"
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 12,
+                      width: 8,
+                      height: 8,
+                      borderRadius: 4,
                       backgroundColor:
-                        (CATEGORY_COLORS[tx.category] || '#48484A') + '22',
+                        CATEGORY_COLORS[transaction.category] || CATEGORY_COLORS.Outros,
                     }}
-                  >
-                    <Text
-                      className="font-bold text-[11px]"
-                      style={{ color: CATEGORY_COLORS[tx.category] || '#8E8E93' }}
-                    >
-                      {tx.category.slice(0, 2).toUpperCase()}
-                    </Text>
-                  </View>
-                  <View className="flex-1 mr-3">
-                    <Text className="text-white text-[14px] font-medium" numberOfLines={1}>
-                      {tx.description || tx.category}
-                    </Text>
-                    <Text className="text-zinc-500 text-[11px] mt-0.5">
-                      {tx.bank ? `${tx.bank} • ` : ''}
-                      {new Date(tx.date).toLocaleDateString('pt-BR', {
-                        day: 'numeric',
-                        month: 'short',
-                      })}
-                    </Text>
-                  </View>
+                  />
+                </View>
+                <View style={{ flex: 1, marginRight: 10 }}>
                   <Text
-                    className={`font-semibold text-[14px] ${
-                      tx.type === 'income' ? 'text-green-500' : 'text-white'
-                    }`}
+                    numberOfLines={1}
+                    style={{ color: '#F5F5F7', fontSize: 15, fontWeight: '400' }}
                   >
-                    {tx.type === 'income' ? '+' : '−'}
-                    {formatCurrency(Math.abs(tx.amount))}
+                    {transaction.description || transaction.category}
+                  </Text>
+                  <Text style={{ color: '#8E8E93', fontSize: 12, fontWeight: '400', marginTop: 3 }}>
+                    {transaction.bank ? `${transaction.bank} · ` : ''}
+                    {new Date(transaction.date).toLocaleDateString('pt-BR', {
+                      day: 'numeric',
+                      month: 'short',
+                    })}
                   </Text>
                 </View>
-              ))}
-            </View>
+                <Text
+                  style={{
+                    color: transaction.type === 'income' ? '#30D158' : '#F5F5F7',
+                    fontSize: 14,
+                    fontWeight: '400',
+                  }}
+                >
+                  {transaction.type === 'income' ? '+' : '-'}
+                  {formatCurrency(Math.abs(Number(transaction.amount)))}
+                </Text>
+              </View>
+            ))
           )}
-        </View>
+        </GlassSurface>
       </ScrollView>
     </View>
   );
 }
 
-function greetingByHour() {
-  const h = new Date().getHours();
-  if (h < 12) return 'Bom dia';
-  if (h < 18) return 'Boa tarde';
-  return 'Boa noite';
+function Metric({ label, value, color }: { label: string; value: string; color: string }) {
+  return (
+    <View style={{ flex: 1, alignItems: 'center' }}>
+      <Text style={{ color: '#848A95', fontSize: 13, fontWeight: '400', marginBottom: 9 }}>
+        {label}
+      </Text>
+      <Text style={{ color, fontSize: 18, fontWeight: '400', letterSpacing: -0.3 }}>{value}</Text>
+    </View>
+  );
 }
 
-function DashboardGlow() {
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+}
+
+function formatCurrencyWhole(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function currentMonthLabel() {
+  const month = new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(new Date());
+  return `${month.charAt(0).toUpperCase()}${month.slice(1)}`;
+}
+
+function daysLeftInMonth() {
+  const today = new Date();
+  return new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() - today.getDate();
+}
+
+function DashboardBackground() {
   return (
     <View pointerEvents="none" style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
       <View
         style={{
           position: 'absolute',
-          top: 72,
-          right: -70,
-          width: 210,
-          height: 210,
-          borderRadius: 105,
-          backgroundColor: 'rgba(0,122,255,0.22)',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 490,
+          backgroundColor: '#071A2B',
         }}
       />
       <View
         style={{
           position: 'absolute',
-          top: 270,
-          left: -100,
-          width: 250,
-          height: 250,
-          borderRadius: 125,
-          backgroundColor: 'rgba(52,199,89,0.14)',
+          top: 230,
+          alignSelf: 'center',
+          width: 390,
+          height: 390,
+          borderRadius: 195,
+          backgroundColor: 'rgba(2,12,23,0.62)',
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: 490,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: '#03070D',
         }}
       />
     </View>

@@ -1,6 +1,6 @@
 import React from 'react';
-import { View, Text } from 'react-native';
-import Svg, { G, Path, Circle } from 'react-native-svg';
+import { Text, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 
 export interface CategorySlice {
   category: string;
@@ -13,98 +13,112 @@ interface Props {
   size?: number;
   thickness?: number;
   total: number;
-  formatTotal?: (value: number) => string;
+  centerValue: string;
+  centerLabel?: string;
 }
 
-function polarToCartesian(cx: number, cy: number, r: number, angle: number) {
-  const rad = ((angle - 90) * Math.PI) / 180;
-  return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
-}
-
-function arcPath(cx: number, cy: number, r: number, rIn: number, start: number, end: number) {
-  // ensure single tiny arc renders correctly
-  const sweep = end - start;
-  const largeArc = sweep > 180 ? 1 : 0;
-  const p1 = polarToCartesian(cx, cy, r, start);
-  const p2 = polarToCartesian(cx, cy, r, end);
-  const p3 = polarToCartesian(cx, cy, rIn, end);
-  const p4 = polarToCartesian(cx, cy, rIn, start);
-
-  return [
-    `M ${p1.x} ${p1.y}`,
-    `A ${r} ${r} 0 ${largeArc} 1 ${p2.x} ${p2.y}`,
-    `L ${p3.x} ${p3.y}`,
-    `A ${rIn} ${rIn} 0 ${largeArc} 0 ${p4.x} ${p4.y}`,
-    'Z',
-  ].join(' ');
+function pointOnCircle(cx: number, cy: number, radius: number, angle: number) {
+  const radians = ((angle - 90) * Math.PI) / 180;
+  return {
+    x: cx + radius * Math.cos(radians),
+    y: cy + radius * Math.sin(radians),
+  };
 }
 
 export function CategoryPieChart({
   data,
-  size = 200,
-  thickness = 28,
+  size = 300,
+  thickness = 15,
   total,
-  formatTotal,
+  centerValue,
+  centerLabel = 'disponível',
 }: Props) {
-  const cx = size / 2;
-  const cy = size / 2;
-  const r = size / 2 - 2;
-  const rIn = r - thickness;
+  const center = size / 2;
+  const radius = size / 2 - thickness;
+  const markersRadius = radius - 35;
+  const circumference = 2 * Math.PI * radius;
+  const slices = data.filter((slice) => slice.amount > 0 && total > 0);
+  const segmentGap = slices.length > 1 ? 7 : 0;
 
-  let cursor = 0;
-  const slices = data
-    .filter((d) => d.amount > 0)
-    .map((d) => {
-      const angle = (d.amount / total) * 360;
-      const start = cursor;
-      const end = cursor + angle;
-      cursor = end;
-      return { ...d, start, end };
-    });
+  let offset = 0;
+  const segments = slices.map((slice) => {
+    const length = (slice.amount / total) * circumference;
+    const segment = { ...slice, length, offset };
+    offset += length;
+    return segment;
+  });
 
   return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={size} height={size}>
-        <G>
-          {slices.length === 0 ? (
+        <Circle
+          cx={center}
+          cy={center}
+          r={radius}
+          stroke="rgba(22,52,82,0.76)"
+          strokeWidth={thickness}
+          fill="none"
+        />
+        {segments.map((segment) => (
+          <Circle
+            key={segment.category}
+            cx={center}
+            cy={center}
+            r={radius}
+            stroke={segment.color}
+            strokeWidth={thickness}
+            strokeLinecap="round"
+            strokeDasharray={`${Math.max(segment.length - segmentGap, 0)} ${circumference}`}
+            strokeDashoffset={-segment.offset}
+            fill="none"
+            transform={`rotate(-90 ${center} ${center})`}
+          />
+        ))}
+        {Array.from({ length: 24 }, (_, index) => {
+          const marker = pointOnCircle(center, center, markersRadius, index * 15);
+          const active = index === 0;
+
+          return (
             <Circle
-              cx={cx}
-              cy={cy}
-              r={(r + rIn) / 2}
-              stroke="#1C1C1E"
-              strokeWidth={thickness}
-              fill="none"
+              key={`marker-${index}`}
+              cx={marker.x}
+              cy={marker.y}
+              r={active ? 3.4 : 2.7}
+              fill={active ? '#0A84FF' : 'rgba(255,255,255,0.22)'}
             />
-          ) : (
-            slices.map((slice, i) => {
-              // gap of 2 deg between slices for visual breathing
-              const gap = slices.length > 1 ? 1.5 : 0;
-              const s = slice.start + gap;
-              const e = slice.end - gap;
-              if (e <= s) return null;
-              return (
-                <Path
-                  key={i}
-                  d={arcPath(cx, cy, r, rIn, s, e)}
-                  fill={slice.color}
-                />
-              );
-            })
-          )}
-        </G>
+          );
+        })}
       </Svg>
       <View
         style={{
           position: 'absolute',
+          width: size * 0.72,
           alignItems: 'center',
           justifyContent: 'center',
         }}
       >
-        <Text style={{ color: '#8E8E93', fontSize: 11, fontWeight: '600', letterSpacing: 0.5 }}>
-          GASTO
+        <Text
+          adjustsFontSizeToFit
+          numberOfLines={1}
+          style={{
+            color: '#F5F5F7',
+            fontSize: size >= 280 ? 42 : 25,
+            fontWeight: '500',
+            letterSpacing: -1.2,
+            fontVariant: ['tabular-nums'],
+          }}
+        >
+          {centerValue}
         </Text>
-        <Text style={{ color: 'white', fontSize: 20, fontWeight: '700', marginTop: 2 }}>
-          {formatTotal ? formatTotal(total) : total.toFixed(2)}
+        <Text
+          style={{
+            color: '#949AA6',
+            fontSize: size >= 280 ? 16 : 12,
+            fontWeight: '400',
+            marginTop: 8,
+          }}
+        >
+          {centerLabel}
         </Text>
       </View>
     </View>

@@ -95,21 +95,20 @@ function AppContent() {
       tintColor="#0A84FF"
       iconColor={{ default: '#8E8E93', selected: '#0A84FF' }}
       labelStyle={{
-        fontFamily: 'SF Pro Rounded',
         fontSize: 11,
-        fontWeight: '600',
+        fontWeight: '400',
       }}
-      backgroundColor="rgba(0,0,0,0.62)"
+      backgroundColor="rgba(8,10,14,0.68)"
       blurEffect="systemChromeMaterialDark"
       minimizeBehavior="onScrollDown"
     >
       <NativeTabs.Trigger name="index">
-        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house' }} md="home" />
         <NativeTabs.Trigger.Label>Dashboard</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="transactions">
         <NativeTabs.Trigger.Icon
-          sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' }}
+          sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle' }}
           md="receipt_long"
         />
         <NativeTabs.Trigger.Label>Transações</NativeTabs.Trigger.Label>
@@ -122,7 +121,7 @@ function AppContent() {
         <NativeTabs.Trigger.Label>Shortcuts</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
-        <NativeTabs.Trigger.Icon sf={{ default: 'person', selected: 'person.fill' }} md="account_circle" />
+        <NativeTabs.Trigger.Icon sf={{ default: 'person', selected: 'person' }} md="account_circle" />
         <NativeTabs.Trigger.Label>Perfil</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
