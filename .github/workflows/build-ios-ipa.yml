@@ -57,6 +57,7 @@ jobs:
 
       - name: Build Unsigned App
         run: |
+          set +e
           xcodebuild build \
             -workspace "${{ steps.detect.outputs.workspace }}" \
             -scheme "${{ steps.detect.outputs.scheme }}" \
@@ -70,6 +71,7 @@ jobs:
             ENABLE_USER_SCRIPT_SANDBOXING=NO \
             > build.log 2>&1
           BUILD_STATUS=$?
+          set -e
 
           echo "::group::Build errors only"
           grep -Ei "(^|[:[:space:]])error:|\\*\\* BUILD|Undefined symbol|ld:|fatal error|❌" build.log | tail -n 120 || true
